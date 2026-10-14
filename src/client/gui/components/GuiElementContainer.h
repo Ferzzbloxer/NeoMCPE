@@ -27,10 +27,6 @@ public:
 	virtual void keyPressed(Minecraft* minecraft, int key);
 	virtual void charPressed(Minecraft* minecraft, char key);
 
-    void clearAll();
-    size_t size() const;
-    GuiElement* get(int index) const;
-
 protected:
 	std::vector<GuiElement*> children;
 };
