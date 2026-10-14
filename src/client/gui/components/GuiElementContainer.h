@@ -1,3 +1,5 @@
+#include <cstddef>
+
 #ifndef NET_MINECRAFT_CLIENT_GUI__GuiElementContainer_H__
 #define NET_MINECRAFT_CLIENT_GUI__GuiElementContainer_H__
 #include "GuiElement.h"
@@ -24,6 +26,10 @@ public:
 	virtual void mouseReleased( Minecraft* minecraft, int x, int y, int buttonNum );
 	virtual void keyPressed(Minecraft* minecraft, int key);
 	virtual void charPressed(Minecraft* minecraft, char key);
+
+    void clearAll();
+    size_t size() const;
+    GuiElement* get(int index) const;
 
 protected:
 	std::vector<GuiElement*> children;
