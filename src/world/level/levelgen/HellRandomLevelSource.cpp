@@ -1,0 +1,337 @@
+#include "HellRandomLevelSource.h"
+#include "../Level.h"
+#include "../ChunkPos.h"
+#include "../chunk/LevelChunk.h"
+#include "../tile/Tile.h"
+#include "../tile/HeavyTile.h"
+#include "../biome/Biome.h"
+#include "feature/FeatureInclude.h"
+#include "../../../util/Mth.h"
+#include "../tile/FireTile.h"
+
+HellRandomLevelSource::HellRandomLevelSource(Level* level, long seed)
+	: level(level),
+	  random(seed),
+	  lperlinNoise1(&random, 16),
+	  lperlinNoise2(&random, 16),
+	  perlinNoise1(&random, 8),
+	  perlinNoise2(&random, 4),
+	  perlinNoise3(&random, 4),
+	  scaleNoise(&random, 10),
+	  depthNoise(&random, 16)
+{
+	buffer = new float[NOISE_SIZE_X * NOISE_SIZE_Y * NOISE_SIZE_Z];
+}
+
+HellRandomLevelSource::~HellRandomLevelSource() {
+	delete[] buffer;
+}
+
+void HellRandomLevelSource::getHeights(float* noiseBuffer, int x, int y, int z) {
+	float s = 684.412f;
+	float hs = 684.412f * 3.0f;
+
+	float* scaleRegion = NULL;
+	float* depthRegion = NULL;
+	float* noiseRegionPrimary = NULL;
+	float* noiseRegionA = NULL;
+	float* noiseRegionB = NULL;
+
+	scaleRegion = scaleNoise.getRegion(scaleRegion, x, z, NOISE_SIZE_X, NOISE_SIZE_Z, 1.0f, 1.0f, 0.5f);
+	depthRegion = depthNoise.getRegion(depthRegion, x, z, NOISE_SIZE_X, NOISE_SIZE_Z, 100.0f, 100.0f, 0.5f);
+
+	noiseRegionPrimary = perlinNoise1.getRegion(noiseRegionPrimary, (float)x, (float)y, (float)z, NOISE_SIZE_X, NOISE_SIZE_Y, NOISE_SIZE_Z, s / 80.0f, hs / 60.0f, s / 80.0f);
+	noiseRegionA = lperlinNoise1.getRegion(noiseRegionA, (float)x, (float)y, (float)z, NOISE_SIZE_X, NOISE_SIZE_Y, NOISE_SIZE_Z, s, hs, s);
+	noiseRegionB = lperlinNoise2.getRegion(noiseRegionB, (float)x, (float)y, (float)z, NOISE_SIZE_X, NOISE_SIZE_Y, NOISE_SIZE_Z, s, hs, s);
+
+	float yoffs[NOISE_SIZE_Y];
+	for (int yy = 0; yy < NOISE_SIZE_Y; yy++) {
+		yoffs[yy] = Mth::cos(yy * Mth::PI * 6.0f / (float)NOISE_SIZE_Y) * 2.0f;
+		float dd = (float)yy;
+		if (yy > NOISE_SIZE_Y / 2) {
+			dd = (float)(NOISE_SIZE_Y - 1) - yy;
+		}
+		if (dd < 4.0f) {
+			dd = 4.0f - dd;
+			yoffs[yy] -= dd * dd * dd * 10.0f;
+		}
+	}
+
+	int p = 0;
+	for (int xx = 0; xx < NOISE_SIZE_X; xx++) {
+		for (int zz = 0; zz < NOISE_SIZE_Z; zz++) {
+			for (int yy = 0; yy < NOISE_SIZE_Y; yy++) {
+				float val = 0.0f;
+				float yOffs = yoffs[yy];
+
+				float bb = noiseRegionA[p] / 512.0f;
+				float cc = noiseRegionB[p] / 512.0f;
+
+				float v = (noiseRegionPrimary[p] / 10.0f + 1.0f) / 2.0f;
+				if (v < 0.0f) val = bb;
+				else if (v > 1.0f) val = cc;
+				else val = bb + (cc - bb) * v;
+
+				val -= yOffs;
+
+				if (yy > NOISE_SIZE_Y - 4) {
+					float slide = (yy - (NOISE_SIZE_Y - 4)) / (4.0f - 1.0f);
+					val = val * (1.0f - slide) + -10.0f * slide;
+				}
+
+				noiseBuffer[p] = val;
+				p++;
+			}
+		}
+	}
+
+	delete[] scaleRegion;
+	delete[] depthRegion;
+	delete[] noiseRegionPrimary;
+	delete[] noiseRegionA;
+	delete[] noiseRegionB;
+}
+
+void HellRandomLevelSource::prepareHeights(int xOffs, int zOffs, unsigned char* blocks) {
+	int xChunks = 16 / CHUNK_WIDTH;
+	int lavaHeight = 32;
+
+	getHeights(buffer, xOffs * xChunks, 0, zOffs * xChunks);
+
+	for (int xc = 0; xc < xChunks; xc++) {
+		for (int zc = 0; zc < xChunks; zc++) {
+			for (int yc = 0; yc < 128 / CHUNK_HEIGHT; yc++) {
+				float yStep = 1.0f / (float)CHUNK_HEIGHT;
+				float s0 = buffer[((xc + 0) * NOISE_SIZE_Z + (zc + 0)) * NOISE_SIZE_Y + (yc + 0)];
+				float s1 = buffer[((xc + 0) * NOISE_SIZE_Z + (zc + 1)) * NOISE_SIZE_Y + (yc + 0)];
+				float s2 = buffer[((xc + 1) * NOISE_SIZE_Z + (zc + 0)) * NOISE_SIZE_Y + (yc + 0)];
+				float s3 = buffer[((xc + 1) * NOISE_SIZE_Z + (zc + 1)) * NOISE_SIZE_Y + (yc + 0)];
+
+				float s0a = (buffer[((xc + 0) * NOISE_SIZE_Z + (zc + 0)) * NOISE_SIZE_Y + (yc + 1)] - s0) * yStep;
+				float s1a = (buffer[((xc + 0) * NOISE_SIZE_Z + (zc + 1)) * NOISE_SIZE_Y + (yc + 1)] - s1) * yStep;
+				float s2a = (buffer[((xc + 1) * NOISE_SIZE_Z + (zc + 0)) * NOISE_SIZE_Y + (yc + 1)] - s2) * yStep;
+				float s3a = (buffer[((xc + 1) * NOISE_SIZE_Z + (zc + 1)) * NOISE_SIZE_Y + (yc + 1)] - s3) * yStep;
+
+				for (int y = 0; y < CHUNK_HEIGHT; y++) {
+					float xStep = 1.0f / (float)CHUNK_WIDTH;
+					float _s0 = s0;
+					float _s1 = s1;
+					float _s0a = (s2 - s0) * xStep;
+					float _s1a = (s3 - s1) * xStep;
+
+					for (int x = 0; x < CHUNK_WIDTH; x++) {
+						int offs = (x + xc * CHUNK_WIDTH) << 11 | (zc * CHUNK_WIDTH) << 7 | (yc * CHUNK_HEIGHT + y);
+						int step = 1 << 7;
+						float zStep = 1.0f / (float)CHUNK_WIDTH;
+
+						float val = _s0;
+						float vala = (_s1 - _s0) * zStep;
+
+						for (int z = 0; z < CHUNK_WIDTH; z++) {
+							int tileId = 0;
+							if (yc * CHUNK_HEIGHT + y < lavaHeight) {
+								tileId = Tile::calmLava->id;
+							}
+							if (val > 0.0f) {
+								tileId = Tile::netherrack->id;
+							}
+
+							blocks[offs] = (unsigned char)tileId;
+							offs += step;
+							val += vala;
+						}
+						_s0 += _s0a;
+						_s1 += _s1a;
+					}
+					s0 += s0a;
+					s1 += s1a;
+					s2 += s2a;
+					s3 += s3a;
+				}
+			}
+		}
+	}
+}
+
+void HellRandomLevelSource::buildSurfaces(int xOffs, int zOffs, unsigned char* blocks) {
+	float s = 1.0f / 32.0f;
+	perlinNoise2.getRegion(sandBuffer, (float)(xOffs * 16), (float)(zOffs * 16), 0, 16, 16, 1, s, s, 1.0f);
+	perlinNoise2.getRegion(gravelBuffer, (float)(xOffs * 16), 109.01340f, (float)(zOffs * 16), 16, 1, 16, s, 1.0f, s);
+	perlinNoise3.getRegion(depthBuffer, (float)(xOffs * 16), (float)(zOffs * 16), 0, 16, 16, 1, s * 2.0f, s * 2.0f, s * 2.0f);
+
+	for (int x = 0; x < 16; x++) {
+		for (int z = 0; z < 16; z++) {
+			bool gravel = (gravelBuffer[x + z * 16] + random.nextFloat() * 0.2f) > 0.0f;
+			bool sand = (sandBuffer[x + z * 16] + random.nextFloat() * 0.2f) > 0.0f;
+			int runDepth = (int)(depthBuffer[x + z * 16] / 3.0f + 3.0f + random.nextFloat() * 0.25f);
+
+			int run = -1;
+			int top = Tile::netherrack->id;
+			int mat = Tile::netherrack->id;
+
+			for (int y = 127; y >= 0; y--) {
+				int offs = (x << 11) | (z << 7) | y;
+
+				// Dual Bedrock ceiling and floor
+				if (y >= 127 - random.nextInt(5) || y <= random.nextInt(5)) {
+					blocks[offs] = (unsigned char)Tile::unbreakable->id;
+				} else {
+					int old = blocks[offs];
+					if (old == 0) {
+						run = -1;
+					} else if (old == Tile::netherrack->id) {
+						if (run == -1) {
+							if (runDepth <= 0) {
+								top = 0;
+								mat = Tile::netherrack->id;
+							} else if (y >= 28 && y <= 33) {
+								top = Tile::netherrack->id;
+								mat = Tile::netherrack->id;
+								if (gravel) {
+									top = Tile::gravel->id;
+									mat = Tile::netherrack->id;
+								}
+								if (sand) {
+									top = Tile::gravel->id;
+									mat = Tile::gravel->id;
+								}
+							}
+
+							if (y < 32 && top == 0) {
+								top = Tile::calmLava->id;
+							}
+
+							run = runDepth;
+							if (y >= 31) {
+								blocks[offs] = (unsigned char)top;
+							} else {
+								blocks[offs] = (unsigned char)mat;
+							}
+						} else if (run > 0) {
+							run--;
+							blocks[offs] = (unsigned char)mat;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
+	level->isGeneratingTerrain = true;
+	HeavyTile::instaFall = true;
+
+	int xo = xt * 16;
+	int zo = zt * 16;
+
+	random.setSeed(level->getSeed());
+	int xScale = random.nextInt() / 2 * 2 + 1;
+	int zScale = random.nextInt() / 2 * 2 + 1;
+	random.setSeed(((xt * xScale) + (zt * zScale)) ^ level->getSeed());
+
+	// 1. Lava Springs (HellSpringFeature)
+	for (int i = 0; i < 8; i++) {
+		int x = xo + random.nextInt(16) + 8;
+		int y = random.nextInt(120) + 4;
+		int z = zo + random.nextInt(16) + 8;
+		SpringFeature feature(Tile::lava->id);
+		feature.place(level, &random, x, y, z);
+	}
+
+	// 2. Fire patches on netherrack
+	int fireCount = random.nextInt(random.nextInt(10) + 1) + 1;
+	for (int i = 0; i < fireCount; i++) {
+		int x = xo + random.nextInt(16) + 8;
+		int y = random.nextInt(120) + 4;
+		int z = zo + random.nextInt(16) + 8;
+		if (level->getTile(x, y - 1, z) == Tile::netherrack->id && level->getTile(x, y, z) == 0) {
+			level->setTile(x, y, z, Tile::fire->id);
+		}
+	}
+
+	// 3. Glowstone clusters (LightGemTile ID 89)
+	for (int i = 0; i < 10; i++) {
+		int x = xo + random.nextInt(16) + 8;
+		int y = random.nextInt(120) + 4;
+		int z = zo + random.nextInt(16) + 8;
+		if (level->getTile(x, y, z) == 0 && level->getTile(x, y + 1, z) == Tile::netherrack->id) {
+			level->setTile(x, y, z, Tile::lightGem->id);
+		}
+	}
+
+	// 4. Nether Quartz (quartzBlock ID 155)
+	for (int i = 0; i < 16; i++) {
+		int x = xo + random.nextInt(16);
+		int y = random.nextInt(108) + 10;
+		int z = zo + random.nextInt(16);
+		OreFeature quartzFeature(Tile::quartzBlock->id, 14);
+		quartzFeature.place(level, &random, x, y, z);
+	}
+
+	// 5. Mushrooms
+	if (random.nextInt(2) == 0) {
+		int x = xo + random.nextInt(16) + 8;
+		int y = random.nextInt(128);
+		int z = zo + random.nextInt(16) + 8;
+		FlowerFeature feature(Tile::mushroom1->id);
+		feature.place(level, &random, x, y, z);
+	}
+	if (random.nextInt(2) == 0) {
+		int x = xo + random.nextInt(16) + 8;
+		int y = random.nextInt(128);
+		int z = zo + random.nextInt(16) + 8;
+		FlowerFeature feature(Tile::mushroom2->id);
+		feature.place(level, &random, x, y, z);
+	}
+
+	HeavyTile::instaFall = false;
+	level->isGeneratingTerrain = false;
+}
+
+LevelChunk* HellRandomLevelSource::create(int x, int z) {
+	return getChunk(x, z);
+}
+
+LevelChunk* HellRandomLevelSource::getChunk(int xOffs, int zOffs) {
+	int hashedPos = ChunkPos::hashCode(xOffs, zOffs);
+
+	ChunkMap::iterator it = chunkMap.find(hashedPos);
+	if (it != chunkMap.end())
+		return it->second;
+
+	random.setSeed((long)(xOffs * 341872712l + zOffs * 132899541l));
+
+	unsigned char* blocks = new unsigned char[LevelChunk::ChunkBlockCount];
+	LevelChunk* chunk = new LevelChunk(level, blocks, xOffs, zOffs);
+	chunkMap.insert(std::make_pair(hashedPos, chunk));
+
+	prepareHeights(xOffs, zOffs, blocks);
+	buildSurfaces(xOffs, zOffs, blocks);
+
+	chunk->recalcHeightmap();
+	return chunk;
+}
+
+bool HellRandomLevelSource::hasChunk(int x, int z) {
+	return true;
+}
+
+bool HellRandomLevelSource::tick() {
+	return false;
+}
+
+bool HellRandomLevelSource::shouldSave() {
+	return true;
+}
+
+std::string HellRandomLevelSource::gatherStats() {
+	return "HellRandomLevelSource";
+}
+
+Biome::MobList HellRandomLevelSource::getMobsAt(const MobCategory& mobCategory, int x, int y, int z) {
+	if (Biome::hell != NULL) {
+		return Biome::hell->getMobs(mobCategory);
+	}
+	return Biome::MobList();
+}
