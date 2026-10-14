@@ -111,6 +111,7 @@ LOCAL_SRC_FILES := ../../../src/main.cpp \
 ../../../src/client/renderer/Textures.cpp \
 ../../../src/client/renderer/TileRenderer.cpp \
 ../../../src/client/renderer/gles.cpp \
+../../../src/world/level/LevelConstants.cpp \
 ../../../src/client/renderer/culling/Frustum.cpp \
 ../../../src/client/renderer/entity/ArrowRenderer.cpp \
 ../../../src/client/renderer/entity/ChickenRenderer.cpp \
@@ -141,6 +142,12 @@ LOCAL_SRC_FILES := ../../../src/main.cpp \
 ../../../src/network/Packet.cpp \
 ../../../src/network/RakNetInstance.cpp \
 ../../../src/network/ServerSideNetworkHandler.cpp \
+../../../src/commands/Command.cpp \
+../../../src/commands/CommandHelp.cpp \
+../../../src/commands/CommandKick.cpp \
+../../../src/commands/CommandBan.cpp \
+../../../src/commands/CommandManager.cpp \
+../../../src/commands/CommandOp.cpp \
 ../../../src/server/ServerLevel.cpp \
 ../../../src/server/ServerPlayer.cpp \
 ../../../src/util/DataIO.cpp \
@@ -208,6 +215,7 @@ LOCAL_SRC_FILES := ../../../src/main.cpp \
 ../../../src/world/item/crafting/WeaponRecipes.cpp \
 ../../../src/world/level/Explosion.cpp \
 ../../../src/world/level/Level.cpp \
+../../../src/world/level/PortalForcer.cpp \
 ../../../src/world/level/LightLayer.cpp \
 ../../../src/world/level/LightUpdate.cpp \
 ../../../src/world/level/MobSpawner.cpp \
@@ -217,13 +225,16 @@ LOCAL_SRC_FILES := ../../../src/main.cpp \
 ../../../src/world/level/GrassColor.cpp \
 ../../../src/world/level/biome/Biome.cpp \
 ../../../src/world/level/biome/BiomeSource.cpp \
+../../../src/world/level/biome/HellBiome.cpp \
 ../../../src/world/level/chunk/LevelChunk.cpp \
 ../../../src/world/level/dimension/Dimension.cpp \
+../../../src/world/level/dimension/HellDimension.cpp \
 ../../../src/world/level/levelgen/CanyonFeature.cpp \
 ../../../src/world/level/levelgen/DungeonFeature.cpp \
 ../../../src/world/level/levelgen/LargeCaveFeature.cpp \
 ../../../src/world/level/levelgen/LargeFeature.cpp \
 ../../../src/world/level/levelgen/RandomLevelSource.cpp \
+../../../src/world/level/levelgen/HellRandomLevelSource.cpp \
 ../../../src/world/level/levelgen/CustomLevelSource.cpp \
 ../../../src/world/level/levelgen/feature/Feature.cpp \
 ../../../src/world/level/levelgen/synth/ImprovedNoise.cpp \
@@ -258,6 +269,7 @@ LOCAL_SRC_FILES := ../../../src/main.cpp \
 ../../../src/world/level/tile/SlabTile.cpp \
 ../../../src/world/level/tile/TallGrass.cpp \
 ../../../src/world/level/tile/Tile.cpp \
+../../../src/world/level/tile/PortalTile.cpp \
 ../../../src/world/level/tile/TrapDoorTile.cpp \
 ../../../src/world/level/tile/entity/ChestTileEntity.cpp \
 ../../../src/world/level/tile/entity/NetherReactorTileEntity.cpp \
@@ -271,21 +283,12 @@ LOCAL_CPPFLAGS := -std=c++14 -frtti
 LOCAL_CPPFLAGS += -frtti
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../../../src
 
-#LOCAL_CFLAGS := -DANDROID_PUBLISH -DDEMO_MODE $(LOCAL_CFLAGS)
-#LOCAL_CFLAGS := -DANDROID_PUBLISH $(LOCAL_CFLAGS)
-
-#LOCAL_CFLAGS := -DDEMO_MODE -DGLDEBUG $(LOCAL_CFLAGS)
-#LOCAL_CFLAGS := -DGLDEBUG $(LOCAL_CFLAGS)
-
 LOCAL_LDLIBS    := -llog -landroid -lEGL -lGLESv1_CM -lOpenSLES
 LOCAL_STATIC_LIBRARIES := android_native_app_glue RakNet
-
-#LOCAL_CPP_FEATURES := exceptions
 
 TARGET_ARCH_ABI := armeabi-v7a
 
 include $(BUILD_SHARED_LIBRARY)
 
-# NOTE: environment var NDK_MODULE_PATH needs to point to lib_projects folder
 $(call import-module,android/native_app_glue)
 $(call import-module, raknet/jni)
