@@ -111,7 +111,6 @@ LOCAL_SRC_FILES := ../../../src/main.cpp \
 ../../../src/client/renderer/Textures.cpp \
 ../../../src/client/renderer/TileRenderer.cpp \
 ../../../src/client/renderer/gles.cpp \
-../../../src/world/level/LevelConstants.cpp \
 ../../../src/client/renderer/culling/Frustum.cpp \
 ../../../src/client/renderer/entity/ArrowRenderer.cpp \
 ../../../src/client/renderer/entity/ChickenRenderer.cpp \
