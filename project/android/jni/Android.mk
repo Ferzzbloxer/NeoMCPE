@@ -141,12 +141,6 @@ LOCAL_SRC_FILES := ../../../src/main.cpp \
 ../../../src/network/Packet.cpp \
 ../../../src/network/RakNetInstance.cpp \
 ../../../src/network/ServerSideNetworkHandler.cpp \
-../../../src/commands/Command.cpp \
-../../../src/commands/CommandHelp.cpp \
-../../../src/commands/CommandKick.cpp \
-../../../src/commands/CommandBan.cpp \
-../../../src/commands/CommandManager.cpp \
-../../../src/commands/CommandOp.cpp \
 ../../../src/server/ServerLevel.cpp \
 ../../../src/server/ServerPlayer.cpp \
 ../../../src/util/DataIO.cpp \
