@@ -1,3 +1,4 @@
+#include "PortalTile.h"
 #ifndef NET_MINECRAFT_WORLD_LEVEL_TILE__FireTile_H__
 #define NET_MINECRAFT_WORLD_LEVEL_TILE__FireTile_H__
 
