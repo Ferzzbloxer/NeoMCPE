@@ -1,4 +1,3 @@
-#include "PortalTile.h"
 #ifndef NET_MINECRAFT_WORLD_LEVEL_TILE__FireTile_H__
 #define NET_MINECRAFT_WORLD_LEVEL_TILE__FireTile_H__
 
@@ -9,6 +8,7 @@
 #include "../Level.h"
 
 #include "Tile.h"
+#include "PortalTile.h"
 
 class FireTile: public Tile
 {
@@ -73,8 +73,6 @@ public:
     }
 
     void tick(Level* level, int x, int y, int z, Random* random) {
-		
-
         bool infiniBurn = level->getTile(x, y - 1, z) == Tile::netherrack->id;
 
         int age = level->getData(x, y, z);
@@ -134,7 +132,7 @@ public:
         return false;
     }
 
-		    int getRenderLayer() {
+    int getRenderLayer() {
         return Tile::RENDERLAYER_ALPHATEST;
     }
 
@@ -143,12 +141,10 @@ public:
     }
 
     int getFlammability(Level* level, int x, int y, int z, int odds) {
-
         int f = flameOdds[level->getTile(x, y, z)];
         if (f > odds) return f;
         return odds;
     }
-
 
     bool mayPlace(Level* level, int x, int y, int z, unsigned char face) {
         return level->isSolidBlockingTile(x, y - 1, z) || isValidFireLocation(level, x, y, z);
@@ -162,6 +158,14 @@ public:
     }
 
     void onPlace(Level* level, int x, int y, int z) {
+        // If fire is ignited inside an obsidian portal frame, convert to portal!
+        if (Tile::portalTile != NULL) {
+            PortalTile* pTile = (PortalTile*)Tile::portalTile;
+            if (pTile->trySpawnPortal(level, x, y, z)) {
+                return; // Portal created! Don't place normal fire.
+            }
+        }
+
         if (!level->isSolidBlockingTile(x, y - 1, z) && !isValidFireLocation(level, x, y, z)) {
             level->setTile(x, y, z, 0);
             return;
@@ -174,7 +178,6 @@ public:
     }
 
     void ignite(Level* level, int x, int y, int z) {
-
         bool lit = false;
         if (!lit) lit = tryIgnite(level, x, y + 1, z);
         if (!lit) lit = tryIgnite(level, x - 1, y, z);
@@ -188,7 +191,6 @@ public:
     }
 
     void animateTick(Level* level, int x, int y, int z, Random* random) {
-
         if (random->nextInt(24) == 0) {
             level->playSound(x + 0.5f, y + 0.5f, z + 0.5f, "fire.fire", 1 + random->nextFloat(), random->nextFloat() * 0.7f + 0.3f);
         }
@@ -251,7 +253,6 @@ private:
     }
 
     void checkBurn(Level* level, int x, int y, int z, int chance, Random* random) {
-
 		int odds = burnOdds[level->getTile(x, y, z)];
         if (random->nextInt(chance) < odds) {
             bool wasTnt = level->getTile(x, y, z) == Tile::tnt->id;
@@ -267,7 +268,6 @@ private:
     }
 
     bool isValidFireLocation(Level* level, int x, int y, int z) {
-
         if (canBurn(level, x + 1, y, z)) return true;
         if (canBurn(level, x - 1, y, z)) return true;
         if (canBurn(level, x, y - 1, z)) return true;
@@ -279,7 +279,6 @@ private:
     }
 
     int getFireOdds(Level* level, int x, int y, int z) {
-
 		int odds = 0;
         if (!level->isEmptyTile(x, y, z)) return 0;
 
@@ -294,7 +293,6 @@ private:
     }
 
 	bool tryIgnite(Level* level, int x, int y, int z) {
-
 		int t = level->getTile(x, y, z);
         if (t == Tile::fire->id) return true;
         if (t == 0) {
