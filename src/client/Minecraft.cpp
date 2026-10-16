@@ -5,6 +5,10 @@
 #include "platform/input/Keyboard.h"
 #include "world/item/Item.h"
 #include "world/item/ItemInstance.h"
+#include "../world/level/dimension/Dimension.h"
+#include "../world/level/dimension/HellDimension.h"
+#include "../world/level/storage/ExternalFileLevelStorage.h"
+#include "../world/level/PortalForcer.h"
 #include <string>
 #include <cstdlib>
 
@@ -1689,5 +1693,61 @@ void Minecraft::optionUpdated(OptionId option, int value ) {
 	if(option == OPTIONS_GUI_SCALE) {
 		// reapply screen scaling using current window size
 		setSize(width, height);
+	}
+}
+
+void Minecraft::toggleDimension() {
+	if (player == NULL || level == NULL) return;
+
+	// 1. Save current level before switching
+	level->saveLevelData();
+	level->saveGame();
+
+	float fromX = player->x;
+	float fromY = player->y;
+	float fromZ = player->z;
+
+	if (player->dimension == 0) {
+		// ================= OVERWORLD -> NETHER =================
+		float targetX = fromX / 8.0f;
+		float targetZ = fromZ / 8.0f;
+
+		overworldLevel = level;
+
+		if (netherLevel == NULL) {
+			std::string netherName = level->getLevelData()->getLevelName() + "_Nether";
+			Dimension* netherDim = Dimension::getNew(Dimension::NETHER);
+
+			std::string savePath = externalStoragePath + "/games/com.mojang/minecraftWorlds/" + netherName;
+			LevelStorage* netherStorage = new ExternalFileLevelStorage(savePath, netherName);
+
+			LevelSettings settings(level->getSeed(), level->getLevelData()->getGameType());
+			netherLevel = new Level(netherStorage, netherName, settings, level->getLevelData()->getGeneratorVersion(), netherDim);
+		}
+
+		player->dimension = 1;
+		player->portalCooldown = 100;
+
+		// Find or build obsidian portal frame in the Nether
+		PortalForcer::findOrCreatePortal(netherLevel, player, targetX, fromY, targetZ);
+
+		// Switch world
+		setLevel(netherLevel, "Entering the Nether...", player);
+
+	} else {
+		// ================= NETHER -> OVERWORLD =================
+		float targetX = fromX * 8.0f;
+		float targetZ = fromZ * 8.0f;
+
+		netherLevel = level;
+
+		player->dimension = 0;
+		player->portalCooldown = 100;
+
+		// Find or build obsidian portal frame in Overworld
+		PortalForcer::findOrCreatePortal(overworldLevel, player, targetX, fromY, targetZ);
+
+		// Switch world
+		setLevel(overworldLevel, "Leaving the Nether...", player);
 	}
 }
