@@ -6,11 +6,8 @@
 #include "../../entity/Entity.h"
 #include "../../../util/Random.h"
 #include "../../item/ItemCategory.h"
-<<<<<<< HEAD
-=======
 
 static bool sIsSpawning = false; // Spawning guard to prevent self-deletion
->>>>>>> da5303683bcdd68fe80c6b6b20e8bc11d1399370
 
 // ----------------------------------------------------------------------------
 // Helper: PortalShape port from MCPE 1.0
