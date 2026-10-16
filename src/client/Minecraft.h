@@ -1,6 +1,9 @@
 #ifndef NET_MINECRAFT_CLIENT__Minecraft_H__
 #define NET_MINECRAFT_CLIENT__Minecraft_H__
-
+#include "../world/level/dimension/Dimension.h"
+#include "../world/level/dimension/HellDimension.h"
+#include "../world/level/storage/ExternalFileLevelStorage.h"
+#include "../world/level/PortalForcer.h"
 #include "Options.h"
 #ifndef STANDALONE_SERVER
 #include "MouseHandler.h"
