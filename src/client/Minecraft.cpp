@@ -133,7 +133,8 @@ bool Minecraft::useAmbientOcclusion = false;
 
 Minecraft::Minecraft() :	
 	pendingPortalTravel(false),
-	targetPortalX = 0, targetPortalZ = 0,
+	targetPortalX(0.0f),
+	targetPortalZ(0.0f),
 	level(NULL),
 	player(NULL),
 	cameraTargetPlayer(NULL),
