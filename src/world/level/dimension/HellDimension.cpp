@@ -16,6 +16,7 @@ HellDimension::~HellDimension() {
 }
 
 void HellDimension::init() {
+	Dimension::init();
 	this->ultraWarm = true;
 	this->hasCeiling = true;
 	this->foggy = true;
@@ -35,7 +36,7 @@ bool HellDimension::isNaturalDimension() {
 }
 
 bool HellDimension::isValidSpawn(int x, int z) {
-	return false;
+	return true;
 }
 
 float HellDimension::getTimeOfDay(long time, float a) {

@@ -1732,11 +1732,11 @@ void Minecraft::toggleDimension() {
 		player->dimension = 1;
 		player->portalCooldown = 100;
 
-		// Find or build obsidian portal frame in the Nether
-		PortalForcer::findOrCreatePortal(sNetherLevel, player, targetX, fromY, targetZ);
-
 		// Switch world
 		setLevel(sNetherLevel, "Entering the Nether...", player);
+
+		// Build or find portal in Nether and place player
+		PortalForcer::findOrCreatePortal(sNetherLevel, player, targetX, fromY, targetZ);
 
 	} else {
 		// ================= NETHER -> OVERWORLD =================
@@ -1748,10 +1748,10 @@ void Minecraft::toggleDimension() {
 		player->dimension = 0;
 		player->portalCooldown = 100;
 
-		// Find or build obsidian portal frame in Overworld
-		PortalForcer::findOrCreatePortal(sOverworldLevel, player, targetX, fromY, targetZ);
-
 		// Switch world
 		setLevel(sOverworldLevel, "Leaving the Nether...", player);
+
+		// Build or find portal in Overworld and place player
+		PortalForcer::findOrCreatePortal(sOverworldLevel, player, targetX, fromY, targetZ);
 	}
 }
