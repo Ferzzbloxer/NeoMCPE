@@ -249,22 +249,45 @@ void Player::tick() {
     super::tick();
 
     // ============================================================
-    // Nether Portal Ticking
+    // Nether Portal Detection & Countdown
     // ============================================================
+    // Check if player's body is standing inside a portal tile
+    int minX = (int)(bb.x0 + 0.1f);
+    int maxX = (int)(bb.x1 - 0.1f);
+    int minY = (int)(bb.y0 + 0.1f);
+    int maxY = (int)(bb.y1 - 0.1f);
+    int minZ = (int)(bb.z0 + 0.1f);
+    int maxZ = (int)(bb.z1 - 0.1f);
+
+    bool standingInPortal = false;
+    for (int px = minX; px <= maxX; px++) {
+        for (int py = minY; py <= maxY; py++) {
+            for (int pz = minZ; pz <= maxZ; pz++) {
+                if (level->getTile(px, py, pz) == Tile::portalTile->id) {
+                    standingInPortal = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (standingInPortal) {
+        handleInsidePortal();
+    }
+
     if (inPortal) {
         portalTime++;
-        // Instant in creative, ~4 seconds (80 ticks) in survival
-        int waitTicks = abilities.instabuild ? 1 : 80;
+        int waitTicks = abilities.instabuild ? 1 : 80; // 4s survival, 1 tick creative
 
         if (portalTime >= waitTicks) {
             portalTime = 0;
-            portalCooldown = 100; // 5 second cooldown
+            portalCooldown = 100;
             inPortal = false;
 
-            // Trigger dimension swap (0 -> 1 or 1 -> 0)
+            // Trigger dimension swap
             changeDimension(dimension == 0 ? 1 : 0);
         }
-        inPortal = false; // Reset; will be set to true next tick if still inside portal block
+        inPortal = false;
     } else {
         if (portalTime > 0) portalTime -= 4;
         if (portalTime < 0) portalTime = 0;
