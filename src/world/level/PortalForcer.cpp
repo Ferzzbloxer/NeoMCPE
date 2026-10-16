@@ -3,6 +3,7 @@
 #include "tile/Tile.h"
 #include "tile/PortalTile.h"
 #include "../entity/Entity.h"
+#include "../entity/player/Player.h"
 #include "../phys/Vec3.h"
 
 bool PortalForcer::findOrCreatePortal(Level* level, Entity* entity, float targetX, float targetY, float targetZ) {
@@ -31,11 +32,11 @@ bool PortalForcer::findOrCreatePortal(Level* level, Entity* entity, float target
 	int bx = ix;
 	int bz = iz;
 
-	// 1. Carve a safe walking room of air and build a stone platform
-	for (int dx = -1; dx <= 4; dx++) {
-		for (int dz = -2; dz <= 2; dz++) {
+	// 1. Carve a safe walking room of air and build a solid floor platform
+	for (int dx = -2; dx <= 5; dx++) {
+		for (int dz = -3; dz <= 3; dz++) {
 			for (int dy = 1; dy <= 4; dy++) {
-				level->setTile(bx + dx, by + dy, bz + dz, 0); // Clear air!
+				level->setTile(bx + dx, by + dy, bz + dz, 0); // Clear air so you never suffocate!
 			}
 			// Solid floor platform under feet
 			if (level->getTile(bx + dx, by, bz + dz) == 0) {
@@ -58,7 +59,18 @@ bool PortalForcer::findOrCreatePortal(Level* level, Entity* entity, float target
 		level->setTileAndData(bx + 2, by + h, bz, Tile::portalTile->id, PortalTile::AXIS_X);
 	}
 
-	// Teleport player safely onto the portal floor
-	entity->moveTo((float)bx + 1.5f, (float)by + 1.0f, (float)bz + 0.5f, entity->yRot, entity->xRot);
+	// 3. Teleport player safely ON TOP of the floor and 1.5 blocks in front of the portal!
+	float eyeOffset = 1.62f;
+	Player* p = Player::asPlayer(entity);
+	if (p != NULL) {
+		eyeOffset = p->heightOffset;
+	}
+
+	// Spawn in front of the portal on solid ground
+	entity->setPos((float)bx + 1.5f, (float)by + 1.0f + eyeOffset, (float)bz + 1.5f);
+	entity->xd = 0.0f;
+	entity->yd = 0.0f;
+	entity->zd = 0.0f;
+
 	return true;
 }
