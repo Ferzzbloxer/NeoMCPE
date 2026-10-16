@@ -128,6 +128,8 @@ int Minecraft::customDebugId = Minecraft::CDI_NONE;
 bool Minecraft::useAmbientOcclusion = false;
 
 Minecraft::Minecraft() :	
+	pendingPortalTravel = false,
+	targetPortalX = 0, targetPortalZ = 0,
 	level(NULL),
 	player(NULL),
 	cameraTargetPlayer(NULL),
@@ -313,6 +315,20 @@ void Minecraft::leaveGame(bool renameLevel /*=false*/)
 {
 	if (isGeneratingLevel || !_hasSignaledGeneratingLevelFinished)
 		return;
+
+	// Reset dimension levels so they don't point to deleted memory
+	if (sNetherLevel != NULL) {
+		if (sNetherLevel != level) {
+			sNetherLevel->saveGame();
+			if (sNetherLevel->getChunkSource())
+				sNetherLevel->getChunkSource()->saveAll(true);
+			delete sNetherLevel->getLevelStorage();
+			delete sNetherLevel;
+		}
+		sNetherLevel = NULL;
+	}
+	sOverworldLevel = NULL;
+	pendingPortalTravel = false;
 
 	isGeneratingLevel = false;
 	bool saveLevel = level && (!level->isClientSide || renameLevel);
@@ -1480,6 +1496,12 @@ void Minecraft::_levelGenerated()
 	// Hack to (hopefully) get the players to show (note: in LevelListener
 	// instead, since adding yourself always generates a entityAdded)
 	//EntityRenderDispatcher::getInstance()->onGraphicsReset();
+	// If teleporting through a portal, build it now that chunks are generated!
+	if (pendingPortalTravel) {
+		pendingPortalTravel = false;
+		PortalForcer::findOrCreatePortal(level, player, targetPortalX, player->y, targetPortalZ);
+	}
+
 	_hasSignaledGeneratingLevelFinished = true;
 }
 
@@ -1703,7 +1725,6 @@ static Level* sNetherLevel = NULL;
 void Minecraft::toggleDimension() {
 	if (player == NULL || level == NULL) return;
 
-	// 1. Save current level before switching
 	level->saveLevelData();
 	level->saveGame();
 
@@ -1713,8 +1734,8 @@ void Minecraft::toggleDimension() {
 
 	if (player->dimension == 0) {
 		// ================= OVERWORLD -> NETHER =================
-		float targetX = fromX / 8.0f;
-		float targetZ = fromZ / 8.0f;
+		targetPortalX = fromX / 8.0f;
+		targetPortalZ = fromZ / 8.0f;
 
 		sOverworldLevel = level;
 
@@ -1731,27 +1752,21 @@ void Minecraft::toggleDimension() {
 
 		player->dimension = 1;
 		player->portalCooldown = 100;
+		pendingPortalTravel = true;
 
-		// Switch world
 		setLevel(sNetherLevel, "Entering the Nether...", player);
-
-		// Build or find portal in Nether and place player
-		PortalForcer::findOrCreatePortal(sNetherLevel, player, targetX, fromY, targetZ);
 
 	} else {
 		// ================= NETHER -> OVERWORLD =================
-		float targetX = fromX * 8.0f;
-		float targetZ = fromZ * 8.0f;
+		targetPortalX = fromX * 8.0f;
+		targetPortalZ = fromZ * 8.0f;
 
 		sNetherLevel = level;
 
 		player->dimension = 0;
 		player->portalCooldown = 100;
+		pendingPortalTravel = true;
 
-		// Switch world
 		setLevel(sOverworldLevel, "Leaving the Nether...", player);
-
-		// Build or find portal in Overworld and place player
-		PortalForcer::findOrCreatePortal(sOverworldLevel, player, targetX, fromY, targetZ);
 	}
 }

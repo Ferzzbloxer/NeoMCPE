@@ -209,6 +209,9 @@ protected:
     // @note @attn @warn: this is dangerous as fuck!
 	volatile bool isGeneratingLevel;
 	bool _hasSignaledGeneratingLevelFinished;
+		bool pendingPortalTravel;
+		float targetPortalX;
+		float targetPortalZ;
 
 	LevelStorageSource* storageSource;
 	bool _running;
