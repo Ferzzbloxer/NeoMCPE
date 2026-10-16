@@ -100,6 +100,10 @@
 #include "renderer/LevelRenderer.h"
 #include "particle/ParticleEngine.h"
 #include "../world/level/Level.h"
+
+static Level* sOverworldLevel = NULL;
+static Level* sNetherLevel = NULL;
+
 static void checkGlError(const char* tag) {
 #ifdef GLDEBUG
 	while (1) {
@@ -128,7 +132,7 @@ int Minecraft::customDebugId = Minecraft::CDI_NONE;
 bool Minecraft::useAmbientOcclusion = false;
 
 Minecraft::Minecraft() :	
-	pendingPortalTravel = false,
+	pendingPortalTravel(false),
 	targetPortalX = 0, targetPortalZ = 0,
 	level(NULL),
 	player(NULL),
@@ -1718,9 +1722,6 @@ void Minecraft::optionUpdated(OptionId option, int value ) {
 		setSize(width, height);
 	}
 }
-
-static Level* sOverworldLevel = NULL;
-static Level* sNetherLevel = NULL;
 
 void Minecraft::toggleDimension() {
 	if (player == NULL || level == NULL) return;
