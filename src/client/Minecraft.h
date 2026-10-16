@@ -63,7 +63,7 @@ public:
 
 	void handleBuildAction(BuildActionIntention*);
 
-	void toggleDimension(){}
+	void toggleDimension(); //Now it isn't just a stub anymore yay :D
 	bool isCreativeMode();
 	void setIsCreativeMode(bool isCreative);
 	void setScreen(Screen*);

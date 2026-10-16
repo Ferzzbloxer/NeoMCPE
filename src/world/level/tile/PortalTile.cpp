@@ -6,6 +6,11 @@
 #include "../../entity/Entity.h"
 #include "../../../util/Random.h"
 #include "../../item/ItemCategory.h"
+<<<<<<< HEAD
+=======
+
+static bool sIsSpawning = false; // Spawning guard to prevent self-deletion
+>>>>>>> da5303683bcdd68fe80c6b6b20e8bc11d1399370
 
 // ----------------------------------------------------------------------------
 // Helper: PortalShape port from MCPE 1.0
@@ -83,7 +88,7 @@ public:
 
 				int block = mLevel->getTile(bx, by, bz);
 				if (!isEmptyBlock(block)) {
-					shapeFailed = true; // Hit top obsidian bar or obstacle
+					shapeFailed = true; // Hit ceiling
 					break;
 				}
 
@@ -107,11 +112,11 @@ public:
 			}
 
 			if (shapeFailed) {
-				break; // Done scanning height, now check top frame
+				break;
 			}
 		}
 
-		// Verify that all blocks along the top bar are Obsidian
+		// Verify top obsidian frame
 		for (int i = 0; i < mWidth; i++) {
 			int topId = mLevel->getTile(mBottomLeftX + mRightStepX * i, mBottomLeftY + mHeight, mBottomLeftZ + mRightStepZ * i);
 			if (topId != Tile::obsidian->id) {
@@ -141,12 +146,24 @@ public:
 	int getHeight() { return mHeight; }
 
 	void createPortalBlocks() {
+		sIsSpawning = true;
 		for (int w = 0; w < mWidth; w++) {
 			for (int h = 0; h < mHeight; h++) {
 				int bx = mBottomLeftX + mRightStepX * w;
 				int by = mBottomLeftY + h;
 				int bz = mBottomLeftZ + mRightStepZ * w;
-				mLevel->setTileAndData(bx, by, bz, Tile::portalTile->id, mAxis);
+				mLevel->setTileAndDataNoUpdate(bx, by, bz, Tile::portalTile->id, mAxis);
+			}
+		}
+		sIsSpawning = false;
+
+		// Once all blocks exist, send render updates
+		for (int w = 0; w < mWidth; w++) {
+			for (int h = 0; h < mHeight; h++) {
+				int bx = mBottomLeftX + mRightStepX * w;
+				int by = mBottomLeftY + h;
+				int bz = mBottomLeftZ + mRightStepZ * w;
+				mLevel->sendTileUpdated(bx, by, bz);
 			}
 		}
 	}
@@ -171,7 +188,7 @@ PortalTile::PortalTile(int id, int tex)
 	: Tile(id, tex, Material::portal ? Material::portal : Material::stone)
 {
 	setTicking(true);
-	setDestroyTime(-1.0f); // Unbreakable by hand
+	setDestroyTime(-1.0f);
 	setLightEmission(11.0f / 16.0f);
 	this->category = ItemCategory::Structures;
 	setDescriptionId("portal");
@@ -179,19 +196,29 @@ PortalTile::PortalTile(int id, int tex)
 
 void PortalTile::updateShape(LevelSource* level, int x, int y, int z) {
 	int data = level->getData(x, y, z);
+	if (data == 0) {
+		if (level->getTile(x - 1, y, z) == id || level->getTile(x + 1, y, z) == id) {
+			data = AXIS_X;
+		} else {
+			data = AXIS_Z;
+		}
+	}
+
 	float xr = 0.125f;
 	float zr = 0.125f;
 
 	if (data == AXIS_X) {
 		xr = 0.5f;
+		zr = 0.125f;
 	} else {
+		xr = 0.125f;
 		zr = 0.5f;
 	}
 	setShape(0.5f - xr, 0.0f, 0.5f - zr, 0.5f + xr, 1.0f, 0.5f + zr);
 }
 
 AABB* PortalTile::getAABB(Level* level, int x, int y, int z) {
-	return NULL;
+	return NULL; // Walk through
 }
 
 bool PortalTile::isSolidRender() {
@@ -215,6 +242,8 @@ int PortalTile::getResourceCount(Random* random) {
 }
 
 void PortalTile::neighborChanged(Level* level, int x, int y, int z, int type) {
+	if (sIsSpawning) return; // Ignore updates during creation!
+
 	int axis = level->getData(x, y, z);
 	PortalShape shape(level, x, y, z, (axis == AXIS_X) ? AXIS_X : AXIS_Z);
 
