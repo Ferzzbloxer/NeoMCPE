@@ -13,7 +13,6 @@
 #include <string>
 #include <cstdlib>
 
-
 #if defined(APPLE_DEMO_PROMOTION)
 #define NO_NETWORK
 #endif
@@ -1504,7 +1503,18 @@ void Minecraft::_levelGenerated()
 	// If teleporting through a portal, build it now that chunks are generated!
 	if (pendingPortalTravel) {
 		pendingPortalTravel = false;
-		PortalForcer::findOrCreatePortal(level, player, targetPortalX, player->y, targetPortalZ);
+
+		// 1. Build the portal and teleport player
+		PortalForcer::findOrCreatePortal(level, player, targetPortalX, 45.0f, targetPortalZ);
+
+		// 2. Ensure player is added to the new level so physics, gravity, and ticking work!
+		player->level = level;
+		level->addEntity(player);
+
+		// 3. Connect keyboard movement input
+		if (inputHolder) {
+			player->input = inputHolder->getMoveInput();
+		}
 	}
 
 	_hasSignaledGeneratingLevelFinished = true;
@@ -1731,15 +1741,17 @@ void Minecraft::toggleDimension() {
 	level->saveGame();
 
 	float fromX = player->x;
-	float fromY = player->y;
 	float fromZ = player->z;
+
+	Level* oldLevel = level;
+	Level* newLevel = NULL;
 
 	if (player->dimension == 0) {
 		// ================= OVERWORLD -> NETHER =================
-		targetPortalX = fromX / 8.0f;
-		targetPortalZ = fromZ / 8.0f;
+		float targetX = fromX / 8.0f;
+		float targetZ = fromZ / 8.0f;
 
-		sOverworldLevel = level;
+		sOverworldLevel = oldLevel;
 
 		if (sNetherLevel == NULL) {
 			std::string netherName = level->getLevelData()->getLevelName() + "_Nether";
@@ -1752,23 +1764,31 @@ void Minecraft::toggleDimension() {
 			sNetherLevel = new Level(netherStorage, netherName, settings, level->getLevelData()->getGeneratorVersion(), netherDim);
 		}
 
+		newLevel = sNetherLevel;
 		player->dimension = 1;
-		player->portalCooldown = 100;
-		pendingPortalTravel = true;
-
-		setLevel(sNetherLevel, "Entering the Nether...", player);
+		targetPortalX = targetX;
+		targetPortalZ = targetZ;
 
 	} else {
 		// ================= NETHER -> OVERWORLD =================
-		targetPortalX = fromX * 8.0f;
-		targetPortalZ = fromZ * 8.0f;
+		float targetX = fromX * 8.0f;
+		float targetZ = fromZ * 8.0f;
 
-		sNetherLevel = level;
+		sNetherLevel = oldLevel;
+		newLevel = sOverworldLevel;
 
 		player->dimension = 0;
-		player->portalCooldown = 100;
-		pendingPortalTravel = true;
-
-		setLevel(sOverworldLevel, "Leaving the Nether...", player);
+		targetPortalX = targetX;
+		targetPortalZ = targetZ;
 	}
+
+	player->portalCooldown = 100;
+	pendingPortalTravel = true;
+
+	// Remove player from old level and set pointer to new level
+	oldLevel->removeEntity(player);
+	player->level = newLevel;
+
+	// Switch world
+	setLevel(newLevel, (player->dimension == 1) ? "Entering the Nether..." : "Leaving the Nether...", player);
 }
