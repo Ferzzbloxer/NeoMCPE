@@ -1,11 +1,12 @@
 #include "PortalTile.h"
+#include "FireTile.h"
 #include "../Level.h"
 #include "../LevelSource.h"
 #include "../material/Material.h"
 #include "../../entity/Entity.h"
 #include "../../../util/Random.h"
 #include "../../item/ItemCategory.h"
-#include "FireTile.h"
+#include "../../platform/log.h"
 
 // ----------------------------------------------------------------------------
 // Helper: PortalShape port from MCPE 1.0
@@ -49,7 +50,7 @@ public:
 	}
 
 	bool isEmptyBlock(int blockId) {
-		return blockId == 0 || blockId == Tile::fire->id || blockId == Tile::portalTile->id;
+		return blockId == 0 || blockId == Tile::fire->id || (Tile::portalTile && blockId == Tile::portalTile->id);
 	}
 
 	int getDistanceUntilEdge(int startX, int startY, int startZ, int stepX, int stepZ) {
@@ -73,6 +74,8 @@ public:
 	}
 
 	int calculatePortalHeight() {
+		bool shapeFailed = false;
+
 		for (mHeight = 0; mHeight < PortalTile::MAX_HEIGHT; mHeight++) {
 			for (int i = 0; i < mWidth; i++) {
 				int bx = mBottomLeftX + mRightStepX * i;
@@ -81,30 +84,49 @@ public:
 
 				int block = mLevel->getTile(bx, by, bz);
 				if (!isEmptyBlock(block)) {
-					return 0;
+					shapeFailed = true; // Hit top obsidian bar or obstacle
+					break;
 				}
 
-				if (block == Tile::portalTile->id) {
+				if (Tile::portalTile && block == Tile::portalTile->id) {
 					mNumPortalBlocks++;
 				}
 
 				if (i == 0) {
 					int leftFrame = mLevel->getTile(bx + mLeftStepX, by, bz + mLeftStepZ);
-					if (leftFrame != Tile::obsidian->id) return 0;
-				}
-				if (i == mWidth - 1) {
+					if (leftFrame != Tile::obsidian->id) {
+						shapeFailed = true;
+						break;
+					}
+				} else if (i == mWidth - 1) {
 					int rightFrame = mLevel->getTile(bx + mRightStepX, by, bz + mRightStepZ);
-					if (rightFrame != Tile::obsidian->id) return 0;
+					if (rightFrame != Tile::obsidian->id) {
+						shapeFailed = true;
+						break;
+					}
 				}
+			}
+
+			if (shapeFailed) {
+				break; // Done scanning height, now check top frame
 			}
 		}
 
-		// Verify top frame
+		// Verify that all blocks along the top bar are Obsidian
 		for (int i = 0; i < mWidth; i++) {
 			int topId = mLevel->getTile(mBottomLeftX + mRightStepX * i, mBottomLeftY + mHeight, mBottomLeftZ + mRightStepZ * i);
 			if (topId != Tile::obsidian->id) {
+				mHeight = 0;
+				mBottomLeftValid = false;
 				return 0;
 			}
+		}
+
+		if (mHeight > PortalTile::MAX_HEIGHT || mHeight < PortalTile::MIN_HEIGHT) {
+			mBottomLeftValid = false;
+			mWidth = 0;
+			mHeight = 0;
+			return 0;
 		}
 
 		return mHeight;
@@ -152,7 +174,7 @@ PortalTile::PortalTile(int id, int tex)
 	setTicking(true);
 	setDestroyTime(-1.0f); // Unbreakable by hand
 	setLightEmission(11.0f / 16.0f);
-	this->category = ItemCategory::Structures; // DIRECT ASSIGNMENT
+	this->category = ItemCategory::Structures;
 	setDescriptionId("portal");
 }
 
@@ -170,7 +192,6 @@ void PortalTile::updateShape(LevelSource* level, int x, int y, int z) {
 }
 
 AABB* PortalTile::getAABB(Level* level, int x, int y, int z) {
-	// Portals have no collision box
 	return NULL;
 }
 
@@ -204,11 +225,13 @@ void PortalTile::neighborChanged(Level* level, int x, int y, int z, int type) {
 }
 
 void PortalTile::entityInside(Level* level, int x, int y, int z, Entity* entity) {
-	// Hook for dimension transition cooldown (Batch 3)
+	Player* player = Player::asPlayer(entity);
+	if (player != NULL) {
+		player->handleInsidePortal();
+	}
 }
 
 void PortalTile::animateTick(Level* level, int x, int y, int z, Random* random) {
-	// Particle generation matching 1.0
 }
 
 bool PortalTile::trySpawnPortal(Level* level, int x, int y, int z) {
