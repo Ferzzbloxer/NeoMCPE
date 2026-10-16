@@ -6,7 +6,6 @@
 #include "../../entity/Entity.h"
 #include "../../../util/Random.h"
 #include "../../item/ItemCategory.h"
-#include "../../platform/log.h"
 
 // ----------------------------------------------------------------------------
 // Helper: PortalShape port from MCPE 1.0
