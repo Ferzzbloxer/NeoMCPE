@@ -1467,16 +1467,15 @@ void Minecraft::_levelGenerated()
 
 	level->validateSpawn();
 	level->loadPlayer(player, true);
-	// if we are client side, we trust the server to have given us a correct position
-	if (player && !level->isClientSide) {
+
+	// ONLY reset position to world spawn if NOT traveling through a portal!
+	if (player && !level->isClientSide && !pendingPortalTravel) {
 		player->resetPos(false);
 	}
 
 	if (level && level->dimension) {
-
 		level->dimension->FogType = options.getIntValue(OPTIONS_FOG_TYPE);
 	}
-
 
 	this->cameraTargetPlayer = player;
 
@@ -1497,21 +1496,21 @@ void Minecraft::_levelGenerated()
 	_commandServer->init(commandPort);
 #endif
 
-	// Hack to (hopefully) get the players to show (note: in LevelListener
-	// instead, since adding yourself always generates a entityAdded)
-	//EntityRenderDispatcher::getInstance()->onGraphicsReset();
-	// If teleporting through a portal, build it now that chunks are generated!
+	// If teleporting through a portal:
 	if (pendingPortalTravel) {
 		pendingPortalTravel = false;
 
-		// 1. Build the portal and teleport player
+		// 1. REVIVE THE PLAYER so the engine ticks movement & gravity!
+		player->removed = false;
+
+		// 2. Build the portal and place player on the platform
 		PortalForcer::findOrCreatePortal(level, player, targetPortalX, 45.0f, targetPortalZ);
 
-		// 2. Ensure player is added to the new level so physics, gravity, and ticking work!
+		// 3. Ensure player is attached to this level and in entities list
 		player->level = level;
 		level->addEntity(player);
 
-		// 3. Connect keyboard movement input
+		// 4. Connect keyboard movement input
 		if (inputHolder) {
 			player->input = inputHolder->getMoveInput();
 		}
@@ -1785,9 +1784,10 @@ void Minecraft::toggleDimension() {
 	player->portalCooldown = 100;
 	pendingPortalTravel = true;
 
-	// Remove player from old level and set pointer to new level
+	// Detach from old level
 	oldLevel->removeEntity(player);
 	player->level = newLevel;
+	player->removed = false; // <--- Reset removed flag here too!
 
 	// Switch world
 	setLevel(newLevel, (player->dimension == 1) ? "Entering the Nether..." : "Leaving the Nether...", player);
