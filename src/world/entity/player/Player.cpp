@@ -567,8 +567,7 @@ void Player::_init() {
 
 void Player::handleInsidePortal() {
 	if (portalCooldown > 0) {
-		portalCooldown = 100; // Reset debounce while still standing in portal
-		return;
+		return; // Wait until cooldown finishes before triggering again
 	}
 	inPortal = true;
 }

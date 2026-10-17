@@ -1466,11 +1466,15 @@ void Minecraft::_levelGenerated()
 #endif
 
 	level->validateSpawn();
-	level->loadPlayer(player, true);
 
-	// ONLY reset position to world spawn if NOT traveling through a portal!
-	if (player && !level->isClientSide && !pendingPortalTravel) {
-		player->resetPos(false);
+	// If traveling through a portal, don't let loadPlayer overwrite position or duplicate entity!
+	if (pendingPortalTravel) {
+		level->loadPlayer(player, false); // false = don't add duplicate
+	} else {
+		level->loadPlayer(player, true);
+		if (player && !level->isClientSide) {
+			player->resetPos(false);
+		}
 	}
 
 	if (level && level->dimension) {
@@ -1500,17 +1504,18 @@ void Minecraft::_levelGenerated()
 	if (pendingPortalTravel) {
 		pendingPortalTravel = false;
 
-		// 1. REVIVE THE PLAYER so the engine ticks movement & gravity!
+		// 1. Revive player & set 8-second portal cooldown
 		player->removed = false;
+		player->portalCooldown = 160; 
 
-		// 2. Build the portal and place player on the platform
+		// 2. Build portal and place player safely in front
 		PortalForcer::findOrCreatePortal(level, player, targetPortalX, 45.0f, targetPortalZ);
 
-		// 3. Ensure player is attached to this level and in entities list
+		// 3. Add to level entity list EXACTLY ONCE
 		player->level = level;
 		level->addEntity(player);
 
-		// 4. Connect keyboard movement input
+		// 4. Connect input controls
 		if (inputHolder) {
 			player->input = inputHolder->getMoveInput();
 		}
