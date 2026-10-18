@@ -1773,8 +1773,8 @@ void Minecraft::toggleDimension() {
 
 	if (player->dimension == 0) {
 		// ================= OVERWORLD -> NETHER =================
-		float targetX = fromX / 8.0f;
-		float targetZ = fromZ / 8.0f;
+		float targetX = fromX;
+		float targetZ = fromZ;
 
 		sOverworldLevel = oldLevel;
 
@@ -1805,8 +1805,8 @@ void Minecraft::toggleDimension() {
 
 	} else {
 		// ================= NETHER -> OVERWORLD =================
-		float targetX = fromX * 8.0f;
-		float targetZ = fromZ * 8.0f;
+		float targetX = fromX;
+		float targetZ = fromZ;
 
 		sNetherLevel = oldLevel;
 		newLevel = sOverworldLevel;
