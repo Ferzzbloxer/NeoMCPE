@@ -315,66 +315,6 @@ void Minecraft::setLevel(Level* level, const std::string& message /* ="" */, Loc
 	this->_running = true;
 }
 
-void Minecraft::leaveGame(bool renameLevel /*=false*/)
-{
-	if (isGeneratingLevel || !_hasSignaledGeneratingLevelFinished)
-		return;
-
-	// Reset dimension levels so they don't point to deleted memory
-	if (sNetherLevel != NULL) {
-		if (sNetherLevel != level) {
-			sNetherLevel->saveGame();
-			if (sNetherLevel->getChunkSource())
-				sNetherLevel->getChunkSource()->saveAll(true);
-			delete sNetherLevel->getLevelStorage();
-			delete sNetherLevel;
-		}
-		sNetherLevel = NULL;
-	}
-	sOverworldLevel = NULL;
-	pendingPortalTravel = false;
-
-	isGeneratingLevel = false;
-	bool saveLevel = level && (!level->isClientSide || renameLevel);
-
-	raknetInstance->disconnect();
-	if (saveLevel) {
-		// If server or wanting to save level as client, save all unsaved chunks!
-		level->getChunkSource()->saveAll(true);
-	}
-
-	LOGI("Clearing levels\n");
-
-	cameraTargetPlayer = NULL;
-#ifndef STANDALONE_SERVER
-	levelRenderer->setLevel(NULL);
-	particleEngine->setLevel(NULL);
-#endif
-	LOGI("Erasing callback\n");
-	delete netCallback;
-	netCallback = NULL;
-
-	LOGI("Erasing level\n");
-	if (level != NULL) {
-		delete level->getLevelStorage();
-		delete level;
-		level = NULL;
-	}
-	//delete player;
-	player = NULL;
-	cameraTargetPlayer = NULL;
-
-	_running = false;
-#ifndef STANDALONE_SERVER
-	gui.clearMessages();
-	if (renameLevel) {
-		setScreen(new RenameMPLevelScreen(LevelStorageSource::TempLevelId));
-	}
-	else
-		screenChooser.setScreen(SCREEN_STARTMENU);
-#endif
-}
-
 void Minecraft::prepareLevel(const std::string& title) {
 	LOGI("status: 1\n");
 	progressStageStatusId = 1;
@@ -1446,80 +1386,6 @@ void Minecraft::generateLevel( const std::string& message, Level* level )
 	isGeneratingLevel = false;
 }
 
-void Minecraft::_levelGenerated()
-{
-#ifndef STANDALONE_SERVER
-	if (player == NULL) {
-		player = (LocalPlayer*) gameMode->createPlayer(level);
-		gameMode->initPlayer(player);
-	}
-
-	if (player) {
-		player->input = inputHolder->getMoveInput();
-	}
-
-	if (levelRenderer != NULL) levelRenderer->setLevel(level);
-	if (particleEngine != NULL) particleEngine->setLevel(level);
-
-	gameMode->adjustPlayer(player);
-	gui.onLevelGenerated();
-#endif
-
-	level->validateSpawn();
-
-	// If traveling through a portal, don't let loadPlayer overwrite position or duplicate entity!
-	if (pendingPortalTravel) {
-		level->loadPlayer(player, false); // false = don't add duplicate
-	} else {
-		level->loadPlayer(player, true);
-		if (player && !level->isClientSide) {
-			player->resetPos(false);
-		}
-	}
-
-	if (level && level->dimension) {
-		level->dimension->FogType = options.getIntValue(OPTIONS_FOG_TYPE);
-	}
-
-	this->cameraTargetPlayer = player;
-
-	std::string serverName = options.getStringValue(OPTIONS_USERNAME) + " - " + level->getLevelData()->levelName;
-
-	if (raknetInstance->isServer())
-		raknetInstance->announceServer(serverName);
-
-	if (netCallback) {
-		netCallback->levelGenerated(level);
-	}
-
-#if defined(WIN32) || defined(RPI)
-	if (_commandServer) {
-		delete _commandServer;
-	}
-	_commandServer = new CommandServer(this);
-	_commandServer->init(commandPort);
-#endif
-
-	// If teleporting through a portal:
-	if (pendingPortalTravel) {
-		pendingPortalTravel = false;
-
-		// 1. Revive player & set 10-second cooldown
-		player->removed = false;
-		player->portalCooldown = 200;
-
-		// 2. Build portal and place player safely in front
-		PortalForcer::findOrCreatePortal(level, player, targetPortalX, 45.0f, targetPortalZ);
-
-		// 3. Hook input controls
-		if (inputHolder) {
-			player->input = inputHolder->getMoveInput();
-		}
-	}
-
-	_hasSignaledGeneratingLevelFinished = true;
-}
-
 std::string Minecraft::gatherStats1() {
 #ifndef STANDALONE_SERVER
 	return levelRenderer->gatherStats1();
@@ -1734,10 +1600,156 @@ void Minecraft::optionUpdated(OptionId option, int value ) {
 	}
 }
 
+void Minecraft::_levelGenerated()
+{
+#ifndef STANDALONE_SERVER
+	if (player == NULL) {
+		player = (LocalPlayer*) gameMode->createPlayer(level);
+		gameMode->initPlayer(player);
+	}
+
+	if (player) {
+		player->input = inputHolder->getMoveInput();
+	}
+
+	if (levelRenderer != NULL) levelRenderer->setLevel(level);
+	if (particleEngine != NULL) particleEngine->setLevel(level);
+
+	gameMode->adjustPlayer(player);
+	gui.onLevelGenerated();
+#endif
+
+	level->validateSpawn();
+
+	// If NOT traveling through a portal, load normally
+	if (!pendingPortalTravel) {
+		level->loadPlayer(player, true);
+		if (player && !level->isClientSide) {
+			player->resetPos(false);
+		}
+	} else {
+		// Portal travel: DO NOT duplicate player or reset spawn!
+		pendingPortalTravel = false;
+
+		player->removed = false;
+		player->portalCooldown = 200;
+
+		// 1. Build portal and position player
+		PortalForcer::findOrCreatePortal(level, player, targetPortalX, 45.0f, targetPortalZ);
+
+		// 2. Ensure player is in this level's entity list ONLY ONCE
+		bool alreadyIn = false;
+		for (size_t i = 0; i < level->entities.size(); i++) {
+			if (level->entities[i] == player) { alreadyIn = true; break; }
+		}
+		if (!alreadyIn) {
+			player->level = level;
+			level->addEntity(player);
+		}
+
+		if (inputHolder) {
+			player->input = inputHolder->getMoveInput();
+		}
+	}
+
+	if (level && level->dimension) {
+		level->dimension->FogType = options.getIntValue(OPTIONS_FOG_TYPE);
+	}
+
+	this->cameraTargetPlayer = player;
+
+	std::string serverName = options.getStringValue(OPTIONS_USERNAME) + " - " + level->getLevelData()->levelName;
+
+	if (raknetInstance->isServer())
+		raknetInstance->announceServer(serverName);
+
+	if (netCallback) {
+		netCallback->levelGenerated(level);
+	}
+
+#if defined(WIN32) || defined(RPI)
+	if (_commandServer) {
+		delete _commandServer;
+	}
+	_commandServer = new CommandServer(this);
+	_commandServer->init(commandPort);
+#endif
+
+	_hasSignaledGeneratingLevelFinished = true;
+}
+
+void Minecraft::leaveGame(bool renameLevel /*=false*/)
+{
+	if (isGeneratingLevel || !_hasSignaledGeneratingLevelFinished)
+		return;
+
+	// Save BOTH Overworld and Nether before exiting to title!
+	if (sNetherLevel != NULL) {
+		sNetherLevel->saveLevelData();
+		sNetherLevel->saveGame();
+		if (sNetherLevel->getChunkSource())
+			sNetherLevel->getChunkSource()->saveAll(true);
+		if (sNetherLevel != level) {
+			delete sNetherLevel->getLevelStorage();
+			delete sNetherLevel;
+		}
+		sNetherLevel = NULL;
+	}
+
+	if (sOverworldLevel != NULL && sOverworldLevel != level) {
+		sOverworldLevel->saveLevelData();
+		sOverworldLevel->saveGame();
+		if (sOverworldLevel->getChunkSource())
+			sOverworldLevel->getChunkSource()->saveAll(true);
+		delete sOverworldLevel->getLevelStorage();
+		delete sOverworldLevel;
+		sOverworldLevel = NULL;
+	}
+
+	// Always reset player to Overworld so loading from menu starts cleanly!
+	if (player != NULL) {
+		player->dimension = 0;
+	}
+
+	pendingPortalTravel = false;
+	isGeneratingLevel = false;
+	bool saveLevel = level && (!level->isClientSide || renameLevel);
+
+	raknetInstance->disconnect();
+	if (saveLevel && level != NULL) {
+		level->getChunkSource()->saveAll(true);
+	}
+
+	cameraTargetPlayer = NULL;
+#ifndef STANDALONE_SERVER
+	levelRenderer->setLevel(NULL);
+	particleEngine->setLevel(NULL);
+#endif
+	delete netCallback;
+	netCallback = NULL;
+
+	if (level != NULL) {
+		delete level->getLevelStorage();
+		delete level;
+		level = NULL;
+	}
+	player = NULL;
+	cameraTargetPlayer = NULL;
+	_running = false;
+
+#ifndef STANDALONE_SERVER
+	gui.clearMessages();
+	if (renameLevel) {
+		setScreen(new RenameMPLevelScreen(LevelStorageSource::TempLevelId));
+	} else {
+		screenChooser.setScreen(SCREEN_STARTMENU);
+	}
+#endif
+}
+
 void Minecraft::toggleDimension() {
 	if (player == NULL || level == NULL) return;
 
-	// 1. Save current world state
 	level->saveLevelData();
 	level->saveGame();
 
@@ -1747,7 +1759,7 @@ void Minecraft::toggleDimension() {
 	Level* oldLevel = level;
 	Level* newLevel = NULL;
 
-	// 2. Erase player from old level entities (PREVENTS 2X SPEED BUG!)
+	// Strip player from old level lists to prevent clones and 2x speed!
 	for (int i = (int)oldLevel->entities.size() - 1; i >= 0; i--) {
 		if (oldLevel->entities[i] == player) {
 			oldLevel->entities.erase(oldLevel->entities.begin() + i);
@@ -1767,7 +1779,6 @@ void Minecraft::toggleDimension() {
 		sOverworldLevel = oldLevel;
 
 		if (sNetherLevel == NULL) {
-			// First trip: create and generate Nether
 			std::string netherName = level->getLevelData()->getLevelName() + "_Nether";
 			Dimension* netherDim = Dimension::getNew(Dimension::NETHER);
 
@@ -1805,7 +1816,7 @@ void Minecraft::toggleDimension() {
 		targetPortalZ = targetZ;
 	}
 
-	// ================= SUBSEQUENT TRIPS: INSTANT HOT-SWAP (NO CRASH!) =================
+	// ================= INSTANT HOT-SWAP FOR VISITED DIMENSIONS =================
 	player->portalCooldown = 200;
 	player->removed = false;
 	player->level = newLevel;
@@ -1821,15 +1832,13 @@ void Minecraft::toggleDimension() {
 	newLevel->addEntity(player);
 	newLevel->players.push_back(player);
 
-	// Position player in front of destination portal
+	// Teleport player in front of destination portal
 	PortalForcer::findOrCreatePortal(newLevel, player, targetPortalX, (player->dimension == 1) ? 45.0f : 64.0f, targetPortalZ);
 
-	// Reconnect input
 	if (inputHolder) {
 		player->input = inputHolder->getMoveInput();
 	}
 
-	// Update fog
 	if (newLevel->dimension) {
 		newLevel->dimension->FogType = options.getIntValue(OPTIONS_FOG_TYPE);
 	}
