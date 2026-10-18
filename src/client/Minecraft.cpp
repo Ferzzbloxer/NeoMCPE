@@ -1504,18 +1504,14 @@ void Minecraft::_levelGenerated()
 	if (pendingPortalTravel) {
 		pendingPortalTravel = false;
 
-		// 1. Revive player & set 8-second portal cooldown
+		// 1. Revive player & set 10-second cooldown
 		player->removed = false;
-		player->portalCooldown = 160; 
+		player->portalCooldown = 200;
 
 		// 2. Build portal and place player safely in front
 		PortalForcer::findOrCreatePortal(level, player, targetPortalX, 45.0f, targetPortalZ);
 
-		// 3. Add to level entity list EXACTLY ONCE
-		player->level = level;
-		level->addEntity(player);
-
-		// 4. Connect input controls
+		// 3. Hook input controls
 		if (inputHolder) {
 			player->input = inputHolder->getMoveInput();
 		}

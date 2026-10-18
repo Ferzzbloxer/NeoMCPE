@@ -32,9 +32,9 @@ bool PortalForcer::findOrCreatePortal(Level* level, Entity* entity, float target
 	int bx = ix;
 	int bz = iz;
 
-	// 1. Carve walking room of air and build stone floor platform
+	// 1. Carve a safe walking room of air and build stone floor platform
 	for (int dx = -2; dx <= 5; dx++) {
-		for (int dz = -3; dz <= 3; dz++) {
+		for (int dz = -3; dz <= 4; dz++) {
 			for (int dy = 1; dy <= 4; dy++) {
 				level->setTile(bx + dx, by + dy, bz + dz, 0); // Air
 			}
@@ -61,14 +61,15 @@ bool PortalForcer::findOrCreatePortal(Level* level, Entity* entity, float target
 		level->sendTileUpdated(bx + 2, by + h, bz);
 	}
 
-	// 3. Teleport player safely ON TOP of the floor and 1.5 blocks in front of the portal!
+	// 3. Teleport player safely ON TOP of the floor and 2.5 blocks in front of the portal!
 	float eyeOffset = 1.62f;
 	Player* p = Player::asPlayer(entity);
 	if (p != NULL) {
 		eyeOffset = p->heightOffset;
 	}
 
-	entity->setPos((float)bx + 1.5f, (float)by + 1.0f + eyeOffset, (float)bz + 1.5f);
+	// bz + 2.5f ensures you are completely OUTSIDE the portal block collision!
+	entity->moveTo((float)bx + 1.5f, (float)by + 1.0f + eyeOffset, (float)bz + 2.5f, entity->yRot, entity->xRot);
 	entity->xd = 0.0f;
 	entity->yd = 0.0f;
 	entity->zd = 0.0f;

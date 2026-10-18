@@ -249,47 +249,24 @@ void Player::tick() {
     super::tick();
 
     // ============================================================
-    // Nether Portal Detection & Countdown
+    // Native 1.0 Nether Portal Ticking
     // ============================================================
-    // Check if player's body is standing inside a portal tile
-    int minX = (int)(bb.x0 + 0.1f);
-    int maxX = (int)(bb.x1 - 0.1f);
-    int minY = (int)(bb.y0 + 0.1f);
-    int maxY = (int)(bb.y1 - 0.1f);
-    int minZ = (int)(bb.z0 + 0.1f);
-    int maxZ = (int)(bb.z1 - 0.1f);
-
-    bool standingInPortal = false;
-    for (int px = minX; px <= maxX; px++) {
-        for (int py = minY; py <= maxY; py++) {
-            for (int pz = minZ; pz <= maxZ; pz++) {
-                if (level->getTile(px, py, pz) == Tile::portalTile->id) {
-                    standingInPortal = true;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (standingInPortal) {
-        handleInsidePortal();
-    }
-
     if (inPortal) {
         portalTime++;
-        int waitTicks = abilities.instabuild ? 1 : 80; // 4s survival, 1 tick creative
+        // 60 ticks (3s) in Creative, 80 ticks (4s) in Survival
+        int waitTicks = abilities.instabuild ? 60 : 80;
 
-        if (portalTime >= waitTicks) {
+        if (portalTime >= waitTicks && portalCooldown <= 0) {
             portalTime = 0;
-            portalCooldown = 100;
+            portalCooldown = 200; // 10-second cooldown after traveling!
             inPortal = false;
 
             // Trigger dimension swap
             changeDimension(dimension == 0 ? 1 : 0);
         }
-        inPortal = false;
+        inPortal = false; // Reset; entityInside will set it true next tick if still inside
     } else {
-        if (portalTime > 0) portalTime -= 4;
+        if (portalTime > 0) portalTime -= 2;
         if (portalTime < 0) portalTime = 0;
         if (portalCooldown > 0) portalCooldown--;
     }
@@ -567,7 +544,7 @@ void Player::_init() {
 
 void Player::handleInsidePortal() {
 	if (portalCooldown > 0) {
-		return; // Wait until cooldown finishes before triggering again
+		return; // Still in cooldown, do not start teleporting!
 	}
 	inPortal = true;
 }
