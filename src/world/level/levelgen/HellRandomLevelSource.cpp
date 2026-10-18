@@ -3,11 +3,42 @@
 #include "../ChunkPos.h"
 #include "../chunk/LevelChunk.h"
 #include "../tile/Tile.h"
+#include "../tile/FireTile.h"
 #include "../tile/HeavyTile.h"
 #include "../biome/Biome.h"
 #include "feature/FeatureInclude.h"
 #include "../../../util/Mth.h"
-#include "../tile/FireTile.h"
+
+// ----------------------------------------------------------------------------
+// 1.0 Hanging Glowstone Stalactite Cluster Generator
+// ----------------------------------------------------------------------------
+static void placeGlowstoneCluster(Level* level, Random* random, int startX, int startY, int startZ) {
+	if (level->getTile(startX, startY, startZ) != 0 || level->getTile(startX, startY + 1, startZ) != Tile::netherrack->id) {
+		return;
+	}
+
+	level->setTile(startX, startY, startZ, Tile::lightGem->id);
+
+	for (int i = 0; i < 1500; i++) {
+		int x = startX + random->nextInt(8) - random->nextInt(8);
+		int y = startY - random->nextInt(12);
+		int z = startZ + random->nextInt(8) - random->nextInt(8);
+
+		if (level->getTile(x, y, z) == 0) {
+			int glowNeighbors = 0;
+			if (level->getTile(x - 1, y, z) == Tile::lightGem->id) glowNeighbors++;
+			if (level->getTile(x + 1, y, z) == Tile::lightGem->id) glowNeighbors++;
+			if (level->getTile(x, y - 1, z) == Tile::lightGem->id) glowNeighbors++;
+			if (level->getTile(x, y + 1, z) == Tile::lightGem->id) glowNeighbors++;
+			if (level->getTile(x, y, z - 1) == Tile::lightGem->id) glowNeighbors++;
+			if (level->getTile(x, y, z + 1) == Tile::lightGem->id) glowNeighbors++;
+
+			if (glowNeighbors == 1) {
+				level->setTile(x, y, z, Tile::lightGem->id);
+			}
+		}
+	}
+}
 
 HellRandomLevelSource::HellRandomLevelSource(Level* level, long seed)
 	: level(level),
@@ -73,6 +104,9 @@ void HellRandomLevelSource::getHeights(float* noiseBuffer, int x, int y, int z) 
 				else val = bb + (cc - bb) * v;
 
 				val -= yOffs;
+
+				// Carve out larger open cavern halls (lower density bias)
+				val -= 2.0f;
 
 				if (yy > NOISE_SIZE_Y - 4) {
 					float slide = (yy - (NOISE_SIZE_Y - 4)) / (4.0f - 1.0f);
@@ -172,7 +206,7 @@ void HellRandomLevelSource::buildSurfaces(int xOffs, int zOffs, unsigned char* b
 			for (int y = 127; y >= 0; y--) {
 				int offs = (x << 11) | (z << 7) | y;
 
-				// Dual Bedrock ceiling and floor
+				// Bedrock Ceiling (123..127) & Bedrock Floor (0..4)
 				if (y >= 127 - random.nextInt(5) || y <= random.nextInt(5)) {
 					blocks[offs] = (unsigned char)Tile::unbreakable->id;
 				} else {
@@ -192,8 +226,8 @@ void HellRandomLevelSource::buildSurfaces(int xOffs, int zOffs, unsigned char* b
 									mat = Tile::netherrack->id;
 								}
 								if (sand) {
-									top = Tile::gravel->id;
-									mat = Tile::gravel->id;
+									top = Tile::gravel->id; // Soul sand / gravel beach
+									mat = top;
 								}
 							}
 
@@ -230,17 +264,27 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 	int zScale = random.nextInt() / 2 * 2 + 1;
 	random.setSeed(((xt * xScale) + (zt * zScale)) ^ level->getSeed());
 
-	// 1. Lava Springs (HellSpringFeature)
-	for (int i = 0; i < 8; i++) {
+	// 1. Cascading Lavafalls (SpringFeature) flowing down cavern walls
+	for (int i = 0; i < 24; i++) {
 		int x = xo + random.nextInt(16) + 8;
-		int y = random.nextInt(120) + 4;
+		int y = random.nextInt(90) + 25;
 		int z = zo + random.nextInt(16) + 8;
 		SpringFeature feature(Tile::lava->id);
 		feature.place(level, &random, x, y, z);
 	}
 
-	// 2. Fire patches on netherrack
-	int fireCount = random.nextInt(random.nextInt(10) + 1) + 1;
+	// 2. Hidden Lava Traps inside solid Netherrack
+	for (int i = 0; i < 8; i++) {
+		int x = xo + random.nextInt(16) + 8;
+		int y = random.nextInt(100) + 15;
+		int z = zo + random.nextInt(16) + 8;
+		if (level->getTile(x, y, z) == Tile::netherrack->id) {
+			level->setTile(x, y, z, Tile::calmLava->id);
+		}
+	}
+
+	// 3. Fire Patches on the ground
+	int fireCount = random.nextInt(random.nextInt(12) + 1) + 1;
 	for (int i = 0; i < fireCount; i++) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(120) + 4;
@@ -250,17 +294,24 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		}
 	}
 
-	// 3. Glowstone clusters (LightGemTile ID 89)
-	for (int i = 0; i < 10; i++) {
+	// 4. Large Hanging Glowstone Stalactites (1.0 Cluster Algorithm!)
+	for (int i = 0; i < 15; i++) {
 		int x = xo + random.nextInt(16) + 8;
-		int y = random.nextInt(120) + 4;
+		int y = random.nextInt(85) + 35;
 		int z = zo + random.nextInt(16) + 8;
-		if (level->getTile(x, y, z) == 0 && level->getTile(x, y + 1, z) == Tile::netherrack->id) {
-			level->setTile(x, y, z, Tile::lightGem->id);
-		}
+		placeGlowstoneCluster(level, &random, x, y, z);
 	}
 
-	// 4. Nether Quartz (quartzBlock ID 155)
+	// 5. Nether Gold Ore Veins (16 veins per chunk)
+	for (int i = 0; i < 16; i++) {
+		int x = xo + random.nextInt(16);
+		int y = random.nextInt(108) + 10;
+		int z = zo + random.nextInt(16);
+		OreFeature goldFeature(Tile::goldOre->id, 8);
+		goldFeature.place(level, &random, x, y, z);
+	}
+
+	// 6. Nether Quartz (16 veins per chunk)
 	for (int i = 0; i < 16; i++) {
 		int x = xo + random.nextInt(16);
 		int y = random.nextInt(108) + 10;
@@ -269,7 +320,7 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		quartzFeature.place(level, &random, x, y, z);
 	}
 
-	// 5. Mushrooms
+	// 7. Red & Brown Mushrooms
 	if (random.nextInt(2) == 0) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(128);

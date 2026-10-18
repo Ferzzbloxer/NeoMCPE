@@ -1737,6 +1737,7 @@ void Minecraft::optionUpdated(OptionId option, int value ) {
 void Minecraft::toggleDimension() {
 	if (player == NULL || level == NULL) return;
 
+	// 1. Save current world state
 	level->saveLevelData();
 	level->saveGame();
 
@@ -1746,6 +1747,18 @@ void Minecraft::toggleDimension() {
 	Level* oldLevel = level;
 	Level* newLevel = NULL;
 
+	// 2. Erase player from old level entities (PREVENTS 2X SPEED BUG!)
+	for (int i = (int)oldLevel->entities.size() - 1; i >= 0; i--) {
+		if (oldLevel->entities[i] == player) {
+			oldLevel->entities.erase(oldLevel->entities.begin() + i);
+		}
+	}
+	for (int i = (int)oldLevel->players.size() - 1; i >= 0; i--) {
+		if (oldLevel->players[i] == player) {
+			oldLevel->players.erase(oldLevel->players.begin() + i);
+		}
+	}
+
 	if (player->dimension == 0) {
 		// ================= OVERWORLD -> NETHER =================
 		float targetX = fromX / 8.0f;
@@ -1754,6 +1767,7 @@ void Minecraft::toggleDimension() {
 		sOverworldLevel = oldLevel;
 
 		if (sNetherLevel == NULL) {
+			// First trip: create and generate Nether
 			std::string netherName = level->getLevelData()->getLevelName() + "_Nether";
 			Dimension* netherDim = Dimension::getNew(Dimension::NETHER);
 
@@ -1762,6 +1776,15 @@ void Minecraft::toggleDimension() {
 
 			LevelSettings settings(level->getSeed(), level->getLevelData()->getGameType());
 			sNetherLevel = new Level(netherStorage, netherName, settings, level->getLevelData()->getGeneratorVersion(), netherDim);
+
+			player->dimension = 1;
+			player->portalCooldown = 200;
+			pendingPortalTravel = true;
+			targetPortalX = targetX;
+			targetPortalZ = targetZ;
+
+			setLevel(sNetherLevel, "Entering the Nether...", player);
+			return;
 		}
 
 		newLevel = sNetherLevel;
@@ -1782,14 +1805,32 @@ void Minecraft::toggleDimension() {
 		targetPortalZ = targetZ;
 	}
 
-	player->portalCooldown = 100;
-	pendingPortalTravel = true;
-
-	// Detach from old level
-	oldLevel->removeEntity(player);
+	// ================= SUBSEQUENT TRIPS: INSTANT HOT-SWAP (NO CRASH!) =================
+	player->portalCooldown = 200;
+	player->removed = false;
 	player->level = newLevel;
-	player->removed = false; // <--- Reset removed flag here too!
 
-	// Switch world
-	setLevel(newLevel, (player->dimension == 1) ? "Entering the Nether..." : "Leaving the Nether...", player);
+	this->level = newLevel;
+#ifndef STANDALONE_SERVER
+	if (levelRenderer != NULL) levelRenderer->setLevel(newLevel);
+	if (particleEngine != NULL) particleEngine->setLevel(newLevel);
+#endif
+	gameMode->initLevel(newLevel);
+
+	// Add player exactly once to the new level
+	newLevel->addEntity(player);
+	newLevel->players.push_back(player);
+
+	// Position player in front of destination portal
+	PortalForcer::findOrCreatePortal(newLevel, player, targetPortalX, (player->dimension == 1) ? 45.0f : 64.0f, targetPortalZ);
+
+	// Reconnect input
+	if (inputHolder) {
+		player->input = inputHolder->getMoveInput();
+	}
+
+	// Update fog
+	if (newLevel->dimension) {
+		newLevel->dimension->FogType = options.getIntValue(OPTIONS_FOG_TYPE);
+	}
 }
