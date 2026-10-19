@@ -19,10 +19,10 @@ static void placeGlowstoneCluster(Level* level, Random* random, int startX, int 
 
 	level->setTile(startX, startY, startZ, Tile::lightGem->id);
 
-	for (int i = 0; i < 1500; i++) {
-		int x = startX + random->nextInt(8) - random->nextInt(8);
-		int y = startY - random->nextInt(12);
-		int z = startZ + random->nextInt(8) - random->nextInt(8);
+	for (int i = 0; i < 800; i++) {
+		int x = startX + random->nextInt(6) - random->nextInt(6);
+		int y = startY - random->nextInt(10);
+		int z = startZ + random->nextInt(6) - random->nextInt(6);
 
 		if (level->getTile(x, y, z) == 0) {
 			int glowNeighbors = 0;
@@ -104,7 +104,6 @@ void HellRandomLevelSource::getHeights(float* noiseBuffer, int x, int y, int z) 
 				else val = bb + (cc - bb) * v;
 
 				val -= yOffs;
-				val -= 2.0f; // Open cavern halls
 
 				if (yy > NOISE_SIZE_Y - 4) {
 					float slide = (yy - (NOISE_SIZE_Y - 4)) / (4.0f - 1.0f);
@@ -162,8 +161,8 @@ void HellRandomLevelSource::prepareHeights(int xOffs, int zOffs, unsigned char* 
 						for (int z = 0; z < CHUNK_WIDTH; z++) {
 							int blockZ = z + zc * CHUNK_WIDTH;
 
-							// Native MCPE 0.6.1 Chunk array index: (Z << 11) | (X << 7) | Y
-							int offs = (blockZ << 11) | (blockX << 7) | blockY;
+							// Native MCPE 0.6.1 array index: (X << 11) | (Z << 7) | Y
+							int offs = (blockX << 11) | (blockZ << 7) | blockY;
 
 							int tileId = 0;
 							if (blockY < lavaHeight) {
@@ -206,8 +205,8 @@ void HellRandomLevelSource::buildSurfaces(int xOffs, int zOffs, unsigned char* b
 			int mat = Tile::netherrack->id;
 
 			for (int y = 127; y >= 0; y--) {
-				// Native MCPE 0.6.1 Chunk array index: (Z << 11) | (X << 7) | Y
-				int offs = (z << 11) | (x << 7) | y;
+				// Native MCPE 0.6.1 array index: (x << 11) | (z << 7) | y
+				int offs = (x << 11) | (z << 7) | y;
 
 				// Bedrock Ceiling (123..127) & Bedrock Floor (0..4)
 				if (y >= 127 - random.nextInt(5) || y <= random.nextInt(5)) {
@@ -268,7 +267,7 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 	random.setSeed(((xt * xScale) + (zt * zScale)) ^ level->getSeed());
 
 	// 1. Cascading Lavafalls flowing down cavern walls
-	for (int i = 0; i < 24; i++) {
+	for (int i = 0; i < 16; i++) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(90) + 25;
 		int z = zo + random.nextInt(16) + 8;
@@ -276,18 +275,8 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		feature.place(level, &random, x, y, z);
 	}
 
-	// 2. Hidden Lava Pockets inside solid Netherrack
-	for (int i = 0; i < 8; i++) {
-		int x = xo + random.nextInt(16) + 8;
-		int y = random.nextInt(100) + 15;
-		int z = zo + random.nextInt(16) + 8;
-		if (level->getTile(x, y, z) == Tile::netherrack->id) {
-			level->setTile(x, y, z, Tile::calmLava->id);
-		}
-	}
-
-	// 3. Fire Patches on the ground
-	int fireCount = random.nextInt(random.nextInt(12) + 1) + 1;
+	// 2. Fire Patches on the ground
+	int fireCount = random.nextInt(random.nextInt(10) + 1) + 1;
 	for (int i = 0; i < fireCount; i++) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(120) + 4;
@@ -297,15 +286,15 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		}
 	}
 
-	// 4. Large Hanging Glowstone Stalactites (1.0 Cluster Algorithm!)
-	for (int i = 0; i < 15; i++) {
+	// 3. Hanging Glowstone Stalactite Clusters
+	for (int i = 0; i < 10; i++) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(85) + 35;
 		int z = zo + random.nextInt(16) + 8;
 		placeGlowstoneCluster(level, &random, x, y, z);
 	}
 
-	// 5. Nether Gold Ore Veins (16 veins per chunk)
+	// 4. Nether Gold Ore Veins (16 per chunk!)
 	for (int i = 0; i < 16; i++) {
 		int x = xo + random.nextInt(16);
 		int y = random.nextInt(108) + 10;
@@ -314,7 +303,7 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		goldFeature.place(level, &random, x, y, z);
 	}
 
-	// 6. Nether Quartz (16 veins per chunk)
+	// 5. Nether Quartz (16 per chunk)
 	for (int i = 0; i < 16; i++) {
 		int x = xo + random.nextInt(16);
 		int y = random.nextInt(108) + 10;
@@ -323,7 +312,7 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		quartzFeature.place(level, &random, x, y, z);
 	}
 
-	// 7. Red & Brown Mushrooms
+	// 6. Mushrooms
 	if (random.nextInt(2) == 0) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(128);

@@ -1759,7 +1759,7 @@ void Minecraft::toggleDimension() {
 	Level* oldLevel = level;
 	Level* newLevel = NULL;
 
-	// Strip player from old level lists to prevent duplication
+	// Strip player from old level lists to prevent duplication & 2x speed!
 	for (int i = (int)oldLevel->entities.size() - 1; i >= 0; i--) {
 		if (oldLevel->entities[i] == player) {
 			oldLevel->entities.erase(oldLevel->entities.begin() + i);
@@ -1786,18 +1786,7 @@ void Minecraft::toggleDimension() {
 			LevelStorage* netherStorage = new ExternalFileLevelStorage(savePath, netherName);
 
 			LevelSettings settings(level->getSeed(), level->getLevelData()->getGameType());
-
-			// MUST be ServerLevel so server physics match the Nether!
-			sNetherLevel = new ServerLevel(netherStorage, netherName, settings, level->getLevelData()->getGeneratorVersion(), netherDim);
-
-			player->dimension = 1;
-			player->portalCooldown = 200;
-			pendingPortalTravel = true;
-			targetPortalX = targetX;
-			targetPortalZ = targetZ;
-
-			setLevel(sNetherLevel, "Entering the Nether...", player);
-			return;
+			sNetherLevel = new Level(netherStorage, netherName, settings, level->getLevelData()->getGeneratorVersion(), netherDim);
 		}
 
 		newLevel = sNetherLevel;
@@ -1818,15 +1807,13 @@ void Minecraft::toggleDimension() {
 		targetPortalZ = targetZ;
 	}
 
-	// ================= INSTANT HOT-SWAP =================
+	// Hot-swap level pointers cleanly
 	player->portalCooldown = 200;
 	player->removed = false;
 	player->xd = player->yd = player->zd = 0.0f;
 
-	// Detach from old level
 	oldLevel->removeEntity(player);
 
-	// Rebind level pointers
 	player->level = newLevel;
 	this->level = newLevel;
 
@@ -1840,16 +1827,11 @@ void Minecraft::toggleDimension() {
 #endif
 	gameMode->initLevel(newLevel);
 
-	// Add player to new level
+	// Add player exactly once to new level
 	newLevel->addEntity(player);
 	newLevel->players.push_back(player);
 
-	// Notify server handler so server-side collisions match the new dimension!
-	if (netCallback) {
-		netCallback->levelGenerated(newLevel);
-	}
-
-	// Teleport in front of destination portal
+	// Teleport player in front of destination portal
 	PortalForcer::findOrCreatePortal(newLevel, player, targetPortalX, (player->dimension == 1) ? 45.0f : 64.0f, targetPortalZ);
 
 	if (inputHolder) {
