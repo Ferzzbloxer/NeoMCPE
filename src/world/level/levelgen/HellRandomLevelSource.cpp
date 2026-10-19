@@ -104,9 +104,7 @@ void HellRandomLevelSource::getHeights(float* noiseBuffer, int x, int y, int z) 
 				else val = bb + (cc - bb) * v;
 
 				val -= yOffs;
-
-				// Carve out larger open cavern halls (lower density bias)
-				val -= 2.0f;
+				val -= 2.0f; // Open cavern halls
 
 				if (yy > NOISE_SIZE_Y - 4) {
 					float slide = (yy - (NOISE_SIZE_Y - 4)) / (4.0f - 1.0f);
@@ -154,16 +152,21 @@ void HellRandomLevelSource::prepareHeights(int xOffs, int zOffs, unsigned char* 
 					float _s1a = (s3 - s1) * xStep;
 
 					for (int x = 0; x < CHUNK_WIDTH; x++) {
-						int offs = (x + xc * CHUNK_WIDTH) << 11 | (zc * CHUNK_WIDTH) << 7 | (yc * CHUNK_HEIGHT + y);
-						int step = 1 << 7;
 						float zStep = 1.0f / (float)CHUNK_WIDTH;
-
 						float val = _s0;
 						float vala = (_s1 - _s0) * zStep;
 
+						int blockX = x + xc * CHUNK_WIDTH;
+						int blockY = yc * CHUNK_HEIGHT + y;
+
 						for (int z = 0; z < CHUNK_WIDTH; z++) {
+							int blockZ = z + zc * CHUNK_WIDTH;
+
+							// Native MCPE 0.6.1 Chunk array index: (Z << 11) | (X << 7) | Y
+							int offs = (blockZ << 11) | (blockX << 7) | blockY;
+
 							int tileId = 0;
-							if (yc * CHUNK_HEIGHT + y < lavaHeight) {
+							if (blockY < lavaHeight) {
 								tileId = Tile::calmLava->id;
 							}
 							if (val > 0.0f) {
@@ -171,7 +174,6 @@ void HellRandomLevelSource::prepareHeights(int xOffs, int zOffs, unsigned char* 
 							}
 
 							blocks[offs] = (unsigned char)tileId;
-							offs += step;
 							val += vala;
 						}
 						_s0 += _s0a;
@@ -204,7 +206,8 @@ void HellRandomLevelSource::buildSurfaces(int xOffs, int zOffs, unsigned char* b
 			int mat = Tile::netherrack->id;
 
 			for (int y = 127; y >= 0; y--) {
-				int offs = (x << 11) | (z << 7) | y;
+				// Native MCPE 0.6.1 Chunk array index: (Z << 11) | (X << 7) | Y
+				int offs = (z << 11) | (x << 7) | y;
 
 				// Bedrock Ceiling (123..127) & Bedrock Floor (0..4)
 				if (y >= 127 - random.nextInt(5) || y <= random.nextInt(5)) {
@@ -226,7 +229,7 @@ void HellRandomLevelSource::buildSurfaces(int xOffs, int zOffs, unsigned char* b
 									mat = Tile::netherrack->id;
 								}
 								if (sand) {
-									top = Tile::gravel->id; // Soul sand / gravel beach
+									top = Tile::gravel->id;
 									mat = top;
 								}
 							}
@@ -264,7 +267,7 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 	int zScale = random.nextInt() / 2 * 2 + 1;
 	random.setSeed(((xt * xScale) + (zt * zScale)) ^ level->getSeed());
 
-	// 1. Cascading Lavafalls (SpringFeature) flowing down cavern walls
+	// 1. Cascading Lavafalls flowing down cavern walls
 	for (int i = 0; i < 24; i++) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(90) + 25;
@@ -273,7 +276,7 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		feature.place(level, &random, x, y, z);
 	}
 
-	// 2. Hidden Lava Traps inside solid Netherrack
+	// 2. Hidden Lava Pockets inside solid Netherrack
 	for (int i = 0; i < 8; i++) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(100) + 15;
