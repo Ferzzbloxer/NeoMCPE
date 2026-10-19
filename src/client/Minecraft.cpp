@@ -1833,7 +1833,6 @@ void Minecraft::toggleDimension() {
 #ifndef STANDALONE_SERVER
 	if (levelRenderer != NULL) {
 		levelRenderer->setLevel(newLevel);
-		levelRenderer->allChunksDirty();
 	}
 	if (particleEngine != NULL) {
 		particleEngine->setLevel(newLevel);
