@@ -182,7 +182,7 @@ private:
 // ----------------------------------------------------------------------------
 
 PortalTile::PortalTile(int id, int tex)
-	: Tile(id, tex, Material::portal ? Material::portal : Material::stone)
+	: Tile(id, tex, Material::portal ? Material::portal : Material::glass) // <--- Use glass material
 {
 	setTicking(true);
 	setDestroyTime(-1.0f);
@@ -227,10 +227,14 @@ bool PortalTile::isCubeShaped() {
 }
 
 int PortalTile::getRenderLayer() {
-	return Tile::RENDERLAYER_ALPHATEST;
+	return Tile::RENDERLAYER_BLEND; // Enables smooth 50% alpha transparency
 }
 
 bool PortalTile::shouldRenderFace(LevelSource* level, int x, int y, int z, int face) {
+	// If the neighbor block is also a portal tile, don't draw the dividing line
+	if (level->getTile(x, y, z) == this->id) {
+		return false; 
+	}
 	return true;
 }
 

@@ -1759,7 +1759,7 @@ void Minecraft::toggleDimension() {
 	Level* oldLevel = level;
 	Level* newLevel = NULL;
 
-	// Strip player from old level lists to prevent clones and 2x speed!
+	// Strip player from old level lists to prevent duplication
 	for (int i = (int)oldLevel->entities.size() - 1; i >= 0; i--) {
 		if (oldLevel->entities[i] == player) {
 			oldLevel->entities.erase(oldLevel->entities.begin() + i);
@@ -1773,8 +1773,8 @@ void Minecraft::toggleDimension() {
 
 	if (player->dimension == 0) {
 		// ================= OVERWORLD -> NETHER =================
-		float targetX = fromX / 8.0f;
-		float targetZ = fromZ / 8.0f;
+		float targetX = fromX;
+		float targetZ = fromZ;
 
 		sOverworldLevel = oldLevel;
 
@@ -1786,7 +1786,9 @@ void Minecraft::toggleDimension() {
 			LevelStorage* netherStorage = new ExternalFileLevelStorage(savePath, netherName);
 
 			LevelSettings settings(level->getSeed(), level->getLevelData()->getGameType());
-			sNetherLevel = new Level(netherStorage, netherName, settings, level->getLevelData()->getGeneratorVersion(), netherDim);
+
+			// MUST be ServerLevel so server physics match the Nether!
+			sNetherLevel = new ServerLevel(netherStorage, netherName, settings, level->getLevelData()->getGeneratorVersion(), netherDim);
 
 			player->dimension = 1;
 			player->portalCooldown = 200;
@@ -1805,8 +1807,8 @@ void Minecraft::toggleDimension() {
 
 	} else {
 		// ================= NETHER -> OVERWORLD =================
-		float targetX = fromX * 8.0f;
-		float targetZ = fromZ * 8.0f;
+		float targetX = fromX;
+		float targetZ = fromZ;
 
 		sNetherLevel = oldLevel;
 		newLevel = sOverworldLevel;
@@ -1816,23 +1818,39 @@ void Minecraft::toggleDimension() {
 		targetPortalZ = targetZ;
 	}
 
-	// ================= INSTANT HOT-SWAP FOR VISITED DIMENSIONS =================
+	// ================= INSTANT HOT-SWAP =================
 	player->portalCooldown = 200;
 	player->removed = false;
-	player->level = newLevel;
+	player->xd = player->yd = player->zd = 0.0f;
 
+	// Detach from old level
+	oldLevel->removeEntity(player);
+
+	// Rebind level pointers
+	player->level = newLevel;
 	this->level = newLevel;
+
 #ifndef STANDALONE_SERVER
-	if (levelRenderer != NULL) levelRenderer->setLevel(newLevel);
-	if (particleEngine != NULL) particleEngine->setLevel(newLevel);
+	if (levelRenderer != NULL) {
+		levelRenderer->setLevel(newLevel);
+		levelRenderer->allChunksDirty();
+	}
+	if (particleEngine != NULL) {
+		particleEngine->setLevel(newLevel);
+	}
 #endif
 	gameMode->initLevel(newLevel);
 
-	// Add player exactly once to the new level
+	// Add player to new level
 	newLevel->addEntity(player);
 	newLevel->players.push_back(player);
 
-	// Teleport player in front of destination portal
+	// Notify server handler so server-side collisions match the new dimension!
+	if (netCallback) {
+		netCallback->levelGenerated(newLevel);
+	}
+
+	// Teleport in front of destination portal
 	PortalForcer::findOrCreatePortal(newLevel, player, targetPortalX, (player->dimension == 1) ? 45.0f : 64.0f, targetPortalZ);
 
 	if (inputHolder) {
