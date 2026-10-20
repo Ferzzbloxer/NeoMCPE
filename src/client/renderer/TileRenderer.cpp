@@ -37,10 +37,14 @@ bool TileRenderer::tesselateBlockInWorld(Tile* tt, int x, int y, int z) {
 	float g = ((col >> 8) & 0xff) / 255.0f;
 	float b = ((col) & 0xff) / 255.0f; // xFlipTexture = (x & 1) != (y & 1);
 
+	// Portals emit light; they shouldn't have fake AO shadows in their corners
+	if (tt->id == 90) {
+		return tesselateBlockInWorld(tt, x, y, z, r, g, b);
+	}
+
 	if (Minecraft::useAmbientOcclusion) {
 		return tesselateBlockInWorldWithAmbienceOcclusion(tt, x, y, z, r, g, b);
-	} else
-	{
+	} else {
 		return tesselateBlockInWorld(tt, x, y, z, r, g, b);
 	}
 }
@@ -65,7 +69,6 @@ bool TileRenderer::tesselateBlockInWorld( Tile* tt, int x, int y, int z, float r
 	float biomeG = g;
 	float biomeB = b;
 
-
 	float r11 = c11 * r;
 	float g11 = c11 * g;
 	float b11 = c11 * b;
@@ -87,10 +90,13 @@ bool TileRenderer::tesselateBlockInWorld( Tile* tt, int x, int y, int z, float r
 	float b3 = c3 * b;
 
 	float centerBrightness = tt->getBrightness(level, x, y, z);
+	
+	// Apply 65% transparency if this is a portal
+	float a = (tt->id == 90) ? 0.65f : 1.0f;
 
 	if (noCulling || tt->shouldRenderFace(level, x, y - 1, z, Facing::DOWN)) {
 		float br = tt->getBrightness(level, x, y - 1, z);
-		t.color(r10 * br, g10 * br, b10 * br);
+		t.color(r10 * br, g10 * br, b10 * br, a);
 		renderFaceDown(tt, xf, yf, zf, tt->getTexture(level, x, y, z, 0));
 		changed = true;
 	}
@@ -98,7 +104,7 @@ bool TileRenderer::tesselateBlockInWorld( Tile* tt, int x, int y, int z, float r
 	if (noCulling || tt->shouldRenderFace(level, x, y + 1, z, Facing::UP)) {
 		float br = tt->getBrightness(level, x, y + 1, z);
 		if (tt->yy1 != 1 && !tt->material->isLiquid()) br = centerBrightness;
-		t.color(r11 * br, g11 * br, b11 * br);
+		t.color(r11 * br, g11 * br, b11 * br, a);
 		renderFaceUp(tt, xf, yf, zf, tt->getTexture(level, x, y, z, 1));
 		changed = true;
 	}
@@ -106,11 +112,11 @@ bool TileRenderer::tesselateBlockInWorld( Tile* tt, int x, int y, int z, float r
 	if (noCulling || tt->shouldRenderFace(level, x, y, z - 1, Facing::NORTH)) {
 		float br = tt->getBrightness(level, x, y, z - 1);
 		if (tt->zz0 > 0) br = centerBrightness;
-		t.color(r2 * br, g2 * br, b2 * br);
+		t.color(r2 * br, g2 * br, b2 * br, a);
 		renderNorth(tt, xf, yf, zf, tt->getTexture(level, x, y, z, 2));
-		if ((tt->getTexture(level, x, y, z, 2) == 3) && sideTinting) { // checking if the texture from terrain.png is the normal grass side texture
-			t.color(c2 * br * biomeR, c2 * br * biomeG, c2 * br * biomeB);
-			renderNorth(tt, xf, yf, zf, 38); // rendering an extra face over the side of the cube that is a grayscale grass fringe tinted by t.color using biome colors, kinda inefficient
+		if ((tt->getTexture(level, x, y, z, 2) == 3) && sideTinting) {
+			t.color(c2 * br * biomeR, c2 * br * biomeG, c2 * br * biomeB, a);
+			renderNorth(tt, xf, yf, zf, 38);
 		}
 		changed = true;
 	}
@@ -118,11 +124,11 @@ bool TileRenderer::tesselateBlockInWorld( Tile* tt, int x, int y, int z, float r
 	if (noCulling || tt->shouldRenderFace(level, x, y, z + 1, Facing::SOUTH)) {
 		float br = tt->getBrightness(level, x, y, z + 1);
 		if (tt->zz1 < 1) br = centerBrightness;
-		t.color(r2 * br, g2 * br, b2 * br);
+		t.color(r2 * br, g2 * br, b2 * br, a);
 		renderSouth(tt, xf, yf, zf, tt->getTexture(level, x, y, z, 3));
-		if ((tt->getTexture(level, x, y, z, 3) == 3) && sideTinting){ // checking if the texture from terrain.png is the normal grass side texture
-			t.color(c2 * br * biomeR, c2 * br * biomeG, c2 * br * biomeB);
-			renderSouth(tt, xf, yf, zf, 38); // rendering an extra face over the side of the cube that is a grayscale grass fringe tinted by t.color using biome colors, kinda inefficient
+		if ((tt->getTexture(level, x, y, z, 3) == 3) && sideTinting){
+			t.color(c2 * br * biomeR, c2 * br * biomeG, c2 * br * biomeB, a);
+			renderSouth(tt, xf, yf, zf, 38);
 		}
 		changed = true;
 	}
@@ -130,11 +136,11 @@ bool TileRenderer::tesselateBlockInWorld( Tile* tt, int x, int y, int z, float r
 	if (noCulling || tt->shouldRenderFace(level, x - 1, y, z, Facing::WEST)) {
 		float br = tt->getBrightness(level, x - 1, y, z);
 		if (tt->xx0 > 0) br = centerBrightness;
-		t.color(r3 * br, g3 * br, b3 * br);
+		t.color(r3 * br, g3 * br, b3 * br, a);
 		renderWest(tt, xf, yf, zf, tt->getTexture(level, x, y, z, 4));
-		if ((tt->getTexture(level, x, y, z, 4) == 3) && sideTinting) { // checking if the texture from terrain.png is the normal grass side texture
-			t.color(c2 * br * biomeR, c2 * br * biomeG, c2 * br * biomeB);
-			renderWest(tt, xf, yf, zf, 38); // rendering an extra face over the side of the cube that is a grayscale grass fringe tinted by t.color using biome colors, kinda inefficient
+		if ((tt->getTexture(level, x, y, z, 4) == 3) && sideTinting) {
+			t.color(c3 * br * biomeR, c3 * br * biomeG, c3 * br * biomeB, a);
+			renderWest(tt, xf, yf, zf, 38);
 		}
 		changed = true;
 	}
@@ -142,11 +148,11 @@ bool TileRenderer::tesselateBlockInWorld( Tile* tt, int x, int y, int z, float r
 	if (noCulling || tt->shouldRenderFace(level, x + 1, y, z, Facing::EAST)) {
 		float br = tt->getBrightness(level, x + 1, y, z);
 		if (tt->xx1 < 1) br = centerBrightness;
-		t.color(r3 * br, g3 * br, b3 * br);
+		t.color(r3 * br, g3 * br, b3 * br, a);
 		renderEast(tt, xf, yf, zf, tt->getTexture(level, x, y, z, 5));
-		if ((tt->getTexture(level, x, y, z, 5) == 3) && sideTinting) { // checking if the texture from terrain.png is the normal grass side texture
-			t.color(c2 * br * biomeR, c2 * br * biomeG, c2 * br * biomeB);
-			renderEast(tt, xf, yf, zf, 38); // rendering an extra face over the side of the cube that is a grayscale grass fringe tinted by t.color using biome colors, kinda inefficient
+		if ((tt->getTexture(level, x, y, z, 5) == 3) && sideTinting) {
+			t.color(c3 * br * biomeR, c3 * br * biomeG, c3 * br * biomeB, a);
+			renderEast(tt, xf, yf, zf, 38);
 		}
 		changed = true;
 	}
