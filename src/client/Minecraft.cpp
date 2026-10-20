@@ -1683,7 +1683,9 @@ void Minecraft::_levelGenerated()
 
 void Minecraft::leaveGame(bool renameLevel /*=false*/)
 {
-	DynamicLights::clear(level);
+	#ifndef STANDALONE_SERVER
+		DynamicLights::clear(level);
+	#endif
 	if (isGeneratingLevel || !_hasSignaledGeneratingLevelFinished)
 		return;
 
