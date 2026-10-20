@@ -52,7 +52,7 @@ static int getLightEmission(ItemInstance* item, Player* player) {
 		light = Mth::Max(light, 15);
 	}
 	// Jack o'Lantern / Lit Pumpkin (ID 91)
-	else if (Tile::litPumpkin && id == Tile::litPumpkin->id) {
+	else if (id == 91) {
 		light = Mth::Max(light, 15);
 	}
 	// Lava Bucket (ID 327 or bucket with lava aux)
