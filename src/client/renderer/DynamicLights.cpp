@@ -7,7 +7,7 @@
 #include "../../world/item/ItemInstance.h"
 #include "../../world/entity/player/Player.h"
 #include "../player/LocalPlayer.h"
-#include "../../../util/Mth.h"
+#include "../../util/Mth.h"
 
 #include <vector>
 #include <queue>
