@@ -324,24 +324,17 @@ void Minecraft::prepareLevel(const std::string& title) {
 
 	Stopwatch L;
 
-	// Dont update lights if we load the level (ok, actually just with leveldata version=1.+(?))
-	if (!level->isNew())
-		level->setUpdateLights(false);
+	// Disable the lighting queue during generation so it doesn't blow up memory!
+	level->setUpdateLights(false);
 
 	int Max = CHUNK_CACHE_WIDTH * CHUNK_CACHE_WIDTH;
 	int pp = 0;
 	for (int x = 8; x < (CHUNK_CACHE_WIDTH * CHUNK_WIDTH); x += CHUNK_WIDTH) {
 		for (int z = 8; z < (CHUNK_CACHE_WIDTH * CHUNK_WIDTH); z += CHUNK_WIDTH) {
 			progressStagePercentage = 100 * pp++ / Max;
-			//printf("level generation progress %d\n", progressStagePercentage);
 			B.start();
 			level->getTile(x, 64, z);
 			B.stop();
-			L.start();
-			if (level->isNew())
-				while (level->updateLights())
-					;
-			L.stop();
 		}
 	}
 	A.stop();
