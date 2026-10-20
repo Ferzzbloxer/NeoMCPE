@@ -270,22 +270,23 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 	int zScale = random.nextInt() / 2 * 2 + 1;
 	random.setSeed(((xt * xScale) + (zt * zScale)) ^ level->getSeed());
 
-	// 1. Cascading Lavafalls flowing out of walls
+	// 1. Cascading Lavafalls (using dynamic flowing lava so it flows down!)
 	for (int i = 0; i < 24; i++) {
 		int x = xo + random.nextInt(16) + 8;
-		int y = random.nextInt(90) + 20;
+		int y = random.nextInt(85) + 30;
 		int z = zo + random.nextInt(16) + 8;
-		placeNetherSpring(level, x, y, z);
+		SpringFeature feature(Tile::lava->id);
+		feature.place(level, &random, x, y, z);
+		level->addToTickNextTick(x, y, z, Tile::lava->id, 10);
 	}
 
-	// 2. Hidden Lava Pockets inside solid Netherrack
-	for (int i = 0; i < 16; i++) {
-		int x = xo + random.nextInt(16) + 8;
-		int y = random.nextInt(100) + 15;
-		int z = zo + random.nextInt(16) + 8;
-		if (level->getTile(x, y, z) == Tile::netherrack->id) {
-			level->setTile(x, y, z, Tile::calmLava->id);
-		}
+	// 2. Nether Gold Veins (placed directly in Netherrack)
+	for (int i = 0; i < 20; i++) {
+		int x = xo + random.nextInt(16);
+		int y = random.nextInt(108) + 10;
+		int z = zo + random.nextInt(16);
+		OreFeature goldFeature(Tile::goldOre->id, 10);
+		goldFeature.place(level, &random, x, y, z);
 	}
 
 	// 3. Fire Patches on the ground

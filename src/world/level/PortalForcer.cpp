@@ -10,11 +10,11 @@ bool PortalForcer::findOrCreatePortal(Level* level, Entity* entity, float target
 	int ix = (int)targetX;
 	int iz = (int)targetZ;
 
-	// Clamp safely inside 0.6.1 finite world bounds (30..220)
+	// Clamp safely inside 1024x1024 world boundaries (30..990)
 	if (ix < 30) ix = 30;
-	if (ix > 220) ix = 220;
+	if (ix > 990) ix = 990;
 	if (iz < 30) iz = 30;
-	if (iz > 220) iz = 220;
+	if (iz > 990) iz = 990;
 
 	// In the Nether, find a good cavern floor height
 	int by = 45;
