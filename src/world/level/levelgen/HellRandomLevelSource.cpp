@@ -10,10 +10,10 @@
 #include "../../../util/Mth.h"
 
 // ----------------------------------------------------------------------------
-// 1.0 Hanging Glowstone Stalactite Cluster Generator
+// Custom Nether Helpers
 // ----------------------------------------------------------------------------
+
 static void placeGlowstoneCluster(Level* level, Random* random, int startX, int startY, int startZ) {
-	// Must start in empty air directly underneath a solid block
 	if (!level->isEmptyTile(startX, startY, startZ)) return;
 	if (level->getTile(startX, startY + 1, startZ) != Tile::netherrack->id) return;
 
@@ -40,17 +40,81 @@ static void placeGlowstoneCluster(Level* level, Random* random, int startX, int 
 	}
 }
 
+static void placeNetherSpring(Level* level, int x, int y, int z) {
+	// Must be placed in a wall: 3 sides Netherrack, 1 side air
+	if (level->getTile(x, y, z) != 0) return;
+	if (level->getTile(x, y + 1, z) != Tile::netherrack->id) return;
+
+	int solidCount = 0;
+	if (level->getTile(x - 1, y, z) == Tile::netherrack->id) solidCount++;
+	if (level->getTile(x + 1, y, z) == Tile::netherrack->id) solidCount++;
+	if (level->getTile(x, y, z - 1) == Tile::netherrack->id) solidCount++;
+	if (level->getTile(x, y, z + 1) == Tile::netherrack->id) solidCount++;
+
+	int airCount = 0;
+	if (level->getTile(x - 1, y, z) == 0) airCount++;
+	if (level->getTile(x + 1, y, z) == 0) airCount++;
+	if (level->getTile(x, y, z - 1) == 0) airCount++;
+	if (level->getTile(x, y, z + 1) == 0) airCount++;
+
+	if (solidCount == 3 && airCount == 1) {
+		level->setTile(x, y, z, Tile::lava->id);
+		level->addToTickNextTick(x, y, z, Tile::lava->id, 0); // Force it to start flowing!
+	}
+}
+
+static void placeNetherOre(Level* level, Random* random, int x, int y, int z, int oreId, int count) {
+	float angle = random->nextFloat() * Mth::PI;
+	float x1 = x + Mth::sin(angle) * count / 8.0f;
+	float x2 = x - Mth::sin(angle) * count / 8.0f;
+	float z1 = z + Mth::cos(angle) * count / 8.0f;
+	float z2 = z - Mth::cos(angle) * count / 8.0f;
+	float y1 = y + random->nextInt(3) - 2;
+	float y2 = y + random->nextInt(3) - 2;
+
+	for (int i = 0; i <= count; i++) {
+		float t = i / (float)count;
+		float cx = x1 + (x2 - x1) * t;
+		float cy = y1 + (y2 - y1) * t;
+		float cz = z1 + (z2 - z1) * t;
+		float size = (Mth::sin(i * Mth::PI / count) + 1.0f) * random->nextFloat() * count / 16.0f;
+
+		int minX = Mth::floor(cx - size / 2.0f);
+		int minY = Mth::floor(cy - size / 2.0f);
+		int minZ = Mth::floor(cz - size / 2.0f);
+		int maxX = Mth::floor(cx + size / 2.0f);
+		int maxY = Mth::floor(cy + size / 2.0f);
+		int maxZ = Mth::floor(cz + size / 2.0f);
+
+		for (int bx = minX; bx <= maxX; bx++) {
+			float dx = (bx + 0.5f - cx) / (size / 2.0f);
+			if (dx * dx >= 1.0f) continue;
+			for (int by = minY; by <= maxY; by++) {
+				float dy = (by + 0.5f - cy) / (size / 2.0f);
+				if (dx * dx + dy * dy >= 1.0f) continue;
+				for (int bz = minZ; bz <= maxZ; bz++) {
+					float dz = (bz + 0.5f - cz) / (size / 2.0f);
+					if (dx * dx + dy * dy + dz * dz < 1.0f) {
+						// REPLACE NETHERRACK (ID 87) INSTEAD OF STONE!
+						if (level->getTile(bx, by, bz) == Tile::netherrack->id) {
+							level->setTile(bx, by, bz, oreId);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------
+// Generator Implementation
+// ----------------------------------------------------------------------------
+
 HellRandomLevelSource::HellRandomLevelSource(Level* level, long seed)
-	: level(level),
-	  random(seed),
-	  lperlinNoise1(&random, 16),
-	  lperlinNoise2(&random, 16),
-	  perlinNoise1(&random, 8),
-	  perlinNoise2(&random, 4),
-	  perlinNoise3(&random, 4),
-	  scaleNoise(&random, 10),
-	  depthNoise(&random, 16)
-{
+	: level(level), random(seed),
+	  lperlinNoise1(&random, 16), lperlinNoise2(&random, 16),
+	  perlinNoise1(&random, 8), perlinNoise2(&random, 4), perlinNoise3(&random, 4),
+	  scaleNoise(&random, 10), depthNoise(&random, 16) {
 	buffer = new float[NOISE_SIZE_X * NOISE_SIZE_Y * NOISE_SIZE_Z];
 }
 
@@ -62,15 +126,11 @@ void HellRandomLevelSource::getHeights(float* noiseBuffer, int x, int y, int z) 
 	float s = 684.412f;
 	float hs = 684.412f * 3.0f;
 
-	float* scaleRegion = NULL;
-	float* depthRegion = NULL;
-	float* noiseRegionPrimary = NULL;
-	float* noiseRegionA = NULL;
-	float* noiseRegionB = NULL;
+	float* scaleRegion = NULL; float* depthRegion = NULL;
+	float* noiseRegionPrimary = NULL; float* noiseRegionA = NULL; float* noiseRegionB = NULL;
 
 	scaleRegion = scaleNoise.getRegion(scaleRegion, x, z, NOISE_SIZE_X, NOISE_SIZE_Z, 1.0f, 1.0f, 0.5f);
 	depthRegion = depthNoise.getRegion(depthRegion, x, z, NOISE_SIZE_X, NOISE_SIZE_Z, 100.0f, 100.0f, 0.5f);
-
 	noiseRegionPrimary = perlinNoise1.getRegion(noiseRegionPrimary, (float)x, (float)y, (float)z, NOISE_SIZE_X, NOISE_SIZE_Y, NOISE_SIZE_Z, s / 80.0f, hs / 60.0f, s / 80.0f);
 	noiseRegionA = lperlinNoise1.getRegion(noiseRegionA, (float)x, (float)y, (float)z, NOISE_SIZE_X, NOISE_SIZE_Y, NOISE_SIZE_Z, s, hs, s);
 	noiseRegionB = lperlinNoise2.getRegion(noiseRegionB, (float)x, (float)y, (float)z, NOISE_SIZE_X, NOISE_SIZE_Y, NOISE_SIZE_Z, s, hs, s);
@@ -79,13 +139,8 @@ void HellRandomLevelSource::getHeights(float* noiseBuffer, int x, int y, int z) 
 	for (int yy = 0; yy < NOISE_SIZE_Y; yy++) {
 		yoffs[yy] = Mth::cos(yy * Mth::PI * 6.0f / (float)NOISE_SIZE_Y) * 2.0f;
 		float dd = (float)yy;
-		if (yy > NOISE_SIZE_Y / 2) {
-			dd = (float)(NOISE_SIZE_Y - 1) - yy;
-		}
-		if (dd < 4.0f) {
-			dd = 4.0f - dd;
-			yoffs[yy] -= dd * dd * dd * 10.0f;
-		}
+		if (yy > NOISE_SIZE_Y / 2) dd = (float)(NOISE_SIZE_Y - 1) - yy;
+		if (dd < 4.0f) { dd = 4.0f - dd; yoffs[yy] -= dd * dd * dd * 10.0f; }
 	}
 
 	int p = 0;
@@ -94,11 +149,10 @@ void HellRandomLevelSource::getHeights(float* noiseBuffer, int x, int y, int z) 
 			for (int yy = 0; yy < NOISE_SIZE_Y; yy++) {
 				float val = 0.0f;
 				float yOffs = yoffs[yy];
-
 				float bb = noiseRegionA[p] / 512.0f;
 				float cc = noiseRegionB[p] / 512.0f;
-
 				float v = (noiseRegionPrimary[p] / 10.0f + 1.0f) / 2.0f;
+
 				if (v < 0.0f) val = bb;
 				else if (v > 1.0f) val = cc;
 				else val = bb + (cc - bb) * v;
@@ -116,17 +170,12 @@ void HellRandomLevelSource::getHeights(float* noiseBuffer, int x, int y, int z) 
 		}
 	}
 
-	delete[] scaleRegion;
-	delete[] depthRegion;
-	delete[] noiseRegionPrimary;
-	delete[] noiseRegionA;
-	delete[] noiseRegionB;
+	delete[] scaleRegion; delete[] depthRegion; delete[] noiseRegionPrimary; delete[] noiseRegionA; delete[] noiseRegionB;
 }
 
 void HellRandomLevelSource::prepareHeights(int xOffs, int zOffs, unsigned char* blocks) {
 	int xChunks = 16 / CHUNK_WIDTH;
 	int lavaHeight = 32;
-
 	getHeights(buffer, xOffs * xChunks, 0, zOffs * xChunks);
 
 	for (int xc = 0; xc < xChunks; xc++) {
@@ -137,7 +186,6 @@ void HellRandomLevelSource::prepareHeights(int xOffs, int zOffs, unsigned char* 
 				float s1 = buffer[((xc + 0) * NOISE_SIZE_Z + (zc + 1)) * NOISE_SIZE_Y + (yc + 0)];
 				float s2 = buffer[((xc + 1) * NOISE_SIZE_Z + (zc + 0)) * NOISE_SIZE_Y + (yc + 0)];
 				float s3 = buffer[((xc + 1) * NOISE_SIZE_Z + (zc + 1)) * NOISE_SIZE_Y + (yc + 0)];
-
 				float s0a = (buffer[((xc + 0) * NOISE_SIZE_Z + (zc + 0)) * NOISE_SIZE_Y + (yc + 1)] - s0) * yStep;
 				float s1a = (buffer[((xc + 0) * NOISE_SIZE_Z + (zc + 1)) * NOISE_SIZE_Y + (yc + 1)] - s1) * yStep;
 				float s2a = (buffer[((xc + 1) * NOISE_SIZE_Z + (zc + 0)) * NOISE_SIZE_Y + (yc + 1)] - s2) * yStep;
@@ -145,43 +193,30 @@ void HellRandomLevelSource::prepareHeights(int xOffs, int zOffs, unsigned char* 
 
 				for (int y = 0; y < CHUNK_HEIGHT; y++) {
 					float xStep = 1.0f / (float)CHUNK_WIDTH;
-					float _s0 = s0;
-					float _s1 = s1;
-					float _s0a = (s2 - s0) * xStep;
-					float _s1a = (s3 - s1) * xStep;
+					float _s0 = s0; float _s1 = s1;
+					float _s0a = (s2 - s0) * xStep; float _s1a = (s3 - s1) * xStep;
 
 					for (int x = 0; x < CHUNK_WIDTH; x++) {
 						float zStep = 1.0f / (float)CHUNK_WIDTH;
-						float val = _s0;
-						float vala = (_s1 - _s0) * zStep;
+						float val = _s0; float vala = (_s1 - _s0) * zStep;
 
 						int blockX = x + xc * CHUNK_WIDTH;
 						int blockY = yc * CHUNK_HEIGHT + y;
 
 						for (int z = 0; z < CHUNK_WIDTH; z++) {
 							int blockZ = z + zc * CHUNK_WIDTH;
-
-							// STRICT 0.6.1 INDEX: X << 11 | Z << 7 | Y
 							int offs = (blockX << 11) | (blockZ << 7) | blockY;
-
 							int tileId = 0;
-							if (blockY < lavaHeight) {
-								tileId = Tile::calmLava->id;
-							}
-							if (val > 0.0f) {
-								tileId = Tile::netherrack->id;
-							}
+
+							if (blockY < lavaHeight) tileId = Tile::calmLava->id;
+							if (val > 0.0f) tileId = Tile::netherrack->id;
 
 							blocks[offs] = (unsigned char)tileId;
 							val += vala;
 						}
-						_s0 += _s0a;
-						_s1 += _s1a;
+						_s0 += _s0a; _s1 += _s1a;
 					}
-					s0 += s0a;
-					s1 += s1a;
-					s2 += s2a;
-					s3 += s3a;
+					s0 += s0a; s1 += s1a; s2 += s2a; s3 += s3a;
 				}
 			}
 		}
@@ -205,7 +240,6 @@ void HellRandomLevelSource::buildSurfaces(int xOffs, int zOffs, unsigned char* b
 			int mat = Tile::netherrack->id;
 
 			for (int y = 127; y >= 0; y--) {
-				// STRICT 0.6.1 INDEX: X << 11 | Z << 7 | Y
 				int offs = (x << 11) | (z << 7) | y;
 
 				if (y >= 127 - random.nextInt(5) || y <= random.nextInt(5)) {
@@ -217,31 +251,17 @@ void HellRandomLevelSource::buildSurfaces(int xOffs, int zOffs, unsigned char* b
 					} else if (old == Tile::netherrack->id) {
 						if (run == -1) {
 							if (runDepth <= 0) {
-								top = 0;
-								mat = Tile::netherrack->id;
+								top = 0; mat = Tile::netherrack->id;
 							} else if (y >= 28 && y <= 33) {
-								top = Tile::netherrack->id;
-								mat = Tile::netherrack->id;
-								if (gravel) {
-									top = Tile::gravel->id;
-									mat = Tile::netherrack->id;
-								}
-								if (sand) {
-									top = Tile::gravel->id;
-									mat = top;
-								}
+								top = Tile::netherrack->id; mat = Tile::netherrack->id;
+								if (gravel) { top = Tile::gravel->id; mat = Tile::netherrack->id; }
+								if (sand) { top = Tile::gravel->id; mat = top; }
 							}
 
-							if (y < 32 && top == 0) {
-								top = Tile::calmLava->id;
-							}
+							if (y < 32 && top == 0) top = Tile::calmLava->id;
 
 							run = runDepth;
-							if (y >= 31) {
-								blocks[offs] = (unsigned char)top;
-							} else {
-								blocks[offs] = (unsigned char)mat;
-							}
+							blocks[offs] = (unsigned char)((y >= 31) ? top : mat);
 						} else if (run > 0) {
 							run--;
 							blocks[offs] = (unsigned char)mat;
@@ -265,17 +285,16 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 	int zScale = random.nextInt() / 2 * 2 + 1;
 	random.setSeed(((xt * xScale) + (zt * zScale)) ^ level->getSeed());
 
-	// Lava Springs
-	for (int i = 0; i < 16; i++) {
+	// 1. Cascading Lavafalls (Properly spilling out of Netherrack)
+	for (int i = 0; i < 24; i++) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(90) + 25;
 		int z = zo + random.nextInt(16) + 8;
-		SpringFeature feature(Tile::lava->id);
-		feature.place(level, &random, x, y, z);
+		placeNetherSpring(level, x, y, z);
 	}
 
-	// Hidden Lava Pockets
-	for (int i = 0; i < 8; i++) {
+	// 2. Hidden Lava Pockets inside solid Netherrack
+	for (int i = 0; i < 16; i++) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(100) + 15;
 		int z = zo + random.nextInt(16) + 8;
@@ -284,8 +303,8 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		}
 	}
 
-	// Fire Patches
-	int fireCount = random.nextInt(random.nextInt(10) + 1) + 1;
+	// 3. Fire Patches on the ground
+	int fireCount = random.nextInt(random.nextInt(12) + 1) + 1;
 	for (int i = 0; i < fireCount; i++) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(120) + 4;
@@ -295,7 +314,7 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		}
 	}
 
-	// Natural Hanging Glowstone Clusters
+	// 4. Large Hanging Glowstone Stalactites
 	for (int i = 0; i < 15; i++) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(85) + 35;
@@ -303,22 +322,20 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		placeGlowstoneCluster(level, &random, x, y, z);
 	}
 
-	// Nether Gold & Quartz
+	// 5. Nether Gold & Quartz (Properly replaces Netherrack!)
 	for (int i = 0; i < 16; i++) {
 		int x = xo + random.nextInt(16);
 		int y = random.nextInt(108) + 10;
 		int z = zo + random.nextInt(16);
-		OreFeature goldFeature(Tile::goldOre->id, 8);
-		goldFeature.place(level, &random, x, y, z);
+		placeNetherOre(level, &random, x, y, z, Tile::goldOre->id, 8);
 
 		int qx = xo + random.nextInt(16);
 		int qy = random.nextInt(108) + 10;
 		int qz = zo + random.nextInt(16);
-		OreFeature quartzFeature(Tile::quartzBlock->id, 14);
-		quartzFeature.place(level, &random, qx, qy, qz);
+		placeNetherOre(level, &random, qx, qy, qz, Tile::quartzBlock->id, 14);
 	}
 
-	// Mushrooms
+	// 6. Mushrooms
 	if (random.nextInt(2) == 0) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(128);
