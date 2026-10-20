@@ -87,6 +87,7 @@
 #include "../world/entity/MobCategory.h"
 #include "../world/Difficulty.h"
 #include "../server/ServerLevel.h"
+#include "renderer/DynamicLights.h"
 
 #ifdef CREATORMODE
 #include "../server/CreatorLevel.h"
@@ -520,6 +521,7 @@ void Minecraft::tick(int nTick, int maxTick) {
 			TIMER_POP_PUSH("animateTick");
 			if (player) {
 				level->animateTick(Mth::floor(player->x), Mth::floor(player->y), Mth::floor(player->z));
+				DynamicLights::update(this);
 			}
 #endif
 		}
@@ -1681,6 +1683,7 @@ void Minecraft::_levelGenerated()
 
 void Minecraft::leaveGame(bool renameLevel /*=false*/)
 {
+	DynamicLights::clear(level);
 	if (isGeneratingLevel || !_hasSignaledGeneratingLevelFinished)
 		return;
 
