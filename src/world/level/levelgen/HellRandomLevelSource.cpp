@@ -161,8 +161,8 @@ void HellRandomLevelSource::prepareHeights(int xOffs, int zOffs, unsigned char* 
 						for (int z = 0; z < CHUNK_WIDTH; z++) {
 							int blockZ = z + zc * CHUNK_WIDTH;
 
-							// Native MCPE 0.6.1 array index: (X << 11) | (Z << 7) | Y
-							int offs = (blockX << 11) | (blockZ << 7) | blockY;
+							// CORRECT MCPE 0.6.1 INDEX: Z is 11, X is 7
+							int offs = (blockZ << 11) | (blockX << 7) | blockY;
 
 							int tileId = 0;
 							if (blockY < lavaHeight) {
@@ -205,8 +205,8 @@ void HellRandomLevelSource::buildSurfaces(int xOffs, int zOffs, unsigned char* b
 			int mat = Tile::netherrack->id;
 
 			for (int y = 127; y >= 0; y--) {
-				// Native MCPE 0.6.1 array index: (x << 11) | (z << 7) | y
-				int offs = (x << 11) | (z << 7) | y;
+				// CORRECT MCPE 0.6.1 INDEX: Z is 11, X is 7
+				int offs = (z << 11) | (x << 7) | y;
 
 				// Bedrock Ceiling (123..127) & Bedrock Floor (0..4)
 				if (y >= 127 - random.nextInt(5) || y <= random.nextInt(5)) {
