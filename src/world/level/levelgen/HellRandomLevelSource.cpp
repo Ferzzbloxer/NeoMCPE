@@ -13,16 +13,16 @@
 // 1.0 Hanging Glowstone Stalactite Cluster Generator
 // ----------------------------------------------------------------------------
 static void placeGlowstoneCluster(Level* level, Random* random, int startX, int startY, int startZ) {
-	if (level->getTile(startX, startY, startZ) != 0 || level->getTile(startX, startY + 1, startZ) != Tile::netherrack->id) {
-		return;
-	}
+	// Must start in empty air directly underneath a solid block
+	if (!level->isEmptyTile(startX, startY, startZ)) return;
+	if (level->getTile(startX, startY + 1, startZ) != Tile::netherrack->id) return;
 
 	level->setTile(startX, startY, startZ, Tile::lightGem->id);
 
-	for (int i = 0; i < 800; i++) {
-		int x = startX + random->nextInt(6) - random->nextInt(6);
-		int y = startY - random->nextInt(10);
-		int z = startZ + random->nextInt(6) - random->nextInt(6);
+	for (int i = 0; i < 1500; i++) {
+		int x = startX + random->nextInt(8) - random->nextInt(8);
+		int y = startY - random->nextInt(12);
+		int z = startZ + random->nextInt(8) - random->nextInt(8);
 
 		if (level->getTile(x, y, z) == 0) {
 			int glowNeighbors = 0;
@@ -161,8 +161,8 @@ void HellRandomLevelSource::prepareHeights(int xOffs, int zOffs, unsigned char* 
 						for (int z = 0; z < CHUNK_WIDTH; z++) {
 							int blockZ = z + zc * CHUNK_WIDTH;
 
-							// CORRECT MCPE 0.6.1 INDEX: Z is 11, X is 7
-							int offs = (blockZ << 11) | (blockX << 7) | blockY;
+							// STRICT 0.6.1 INDEX: X << 11 | Z << 7 | Y
+							int offs = (blockX << 11) | (blockZ << 7) | blockY;
 
 							int tileId = 0;
 							if (blockY < lavaHeight) {
@@ -205,10 +205,9 @@ void HellRandomLevelSource::buildSurfaces(int xOffs, int zOffs, unsigned char* b
 			int mat = Tile::netherrack->id;
 
 			for (int y = 127; y >= 0; y--) {
-				// CORRECT MCPE 0.6.1 INDEX: Z is 11, X is 7
-				int offs = (z << 11) | (x << 7) | y;
+				// STRICT 0.6.1 INDEX: X << 11 | Z << 7 | Y
+				int offs = (x << 11) | (z << 7) | y;
 
-				// Bedrock Ceiling (123..127) & Bedrock Floor (0..4)
 				if (y >= 127 - random.nextInt(5) || y <= random.nextInt(5)) {
 					blocks[offs] = (unsigned char)Tile::unbreakable->id;
 				} else {
@@ -266,7 +265,7 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 	int zScale = random.nextInt() / 2 * 2 + 1;
 	random.setSeed(((xt * xScale) + (zt * zScale)) ^ level->getSeed());
 
-	// 1. Cascading Lavafalls flowing down cavern walls
+	// Lava Springs
 	for (int i = 0; i < 16; i++) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(90) + 25;
@@ -275,7 +274,17 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		feature.place(level, &random, x, y, z);
 	}
 
-	// 2. Fire Patches on the ground
+	// Hidden Lava Pockets
+	for (int i = 0; i < 8; i++) {
+		int x = xo + random.nextInt(16) + 8;
+		int y = random.nextInt(100) + 15;
+		int z = zo + random.nextInt(16) + 8;
+		if (level->getTile(x, y, z) == Tile::netherrack->id) {
+			level->setTile(x, y, z, Tile::calmLava->id);
+		}
+	}
+
+	// Fire Patches
 	int fireCount = random.nextInt(random.nextInt(10) + 1) + 1;
 	for (int i = 0; i < fireCount; i++) {
 		int x = xo + random.nextInt(16) + 8;
@@ -286,33 +295,30 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		}
 	}
 
-	// 3. Hanging Glowstone Stalactite Clusters
-	for (int i = 0; i < 10; i++) {
+	// Natural Hanging Glowstone Clusters
+	for (int i = 0; i < 15; i++) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(85) + 35;
 		int z = zo + random.nextInt(16) + 8;
 		placeGlowstoneCluster(level, &random, x, y, z);
 	}
 
-	// 4. Nether Gold Ore Veins (16 per chunk!)
+	// Nether Gold & Quartz
 	for (int i = 0; i < 16; i++) {
 		int x = xo + random.nextInt(16);
 		int y = random.nextInt(108) + 10;
 		int z = zo + random.nextInt(16);
 		OreFeature goldFeature(Tile::goldOre->id, 8);
 		goldFeature.place(level, &random, x, y, z);
-	}
 
-	// 5. Nether Quartz (16 per chunk)
-	for (int i = 0; i < 16; i++) {
-		int x = xo + random.nextInt(16);
-		int y = random.nextInt(108) + 10;
-		int z = zo + random.nextInt(16);
+		int qx = xo + random.nextInt(16);
+		int qy = random.nextInt(108) + 10;
+		int qz = zo + random.nextInt(16);
 		OreFeature quartzFeature(Tile::quartzBlock->id, 14);
-		quartzFeature.place(level, &random, x, y, z);
+		quartzFeature.place(level, &random, qx, qy, qz);
 	}
 
-	// 6. Mushrooms
+	// Mushrooms
 	if (random.nextInt(2) == 0) {
 		int x = xo + random.nextInt(16) + 8;
 		int y = random.nextInt(128);
@@ -332,16 +338,13 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 	level->isGeneratingTerrain = false;
 }
 
-LevelChunk* HellRandomLevelSource::create(int x, int z) {
-	return getChunk(x, z);
-}
+LevelChunk* HellRandomLevelSource::create(int x, int z) { return getChunk(x, z); }
 
 LevelChunk* HellRandomLevelSource::getChunk(int xOffs, int zOffs) {
 	int hashedPos = ChunkPos::hashCode(xOffs, zOffs);
 
 	ChunkMap::iterator it = chunkMap.find(hashedPos);
-	if (it != chunkMap.end())
-		return it->second;
+	if (it != chunkMap.end()) return it->second;
 
 	random.setSeed((long)(xOffs * 341872712l + zOffs * 132899541l));
 
@@ -356,25 +359,12 @@ LevelChunk* HellRandomLevelSource::getChunk(int xOffs, int zOffs) {
 	return chunk;
 }
 
-bool HellRandomLevelSource::hasChunk(int x, int z) {
-	return true;
-}
-
-bool HellRandomLevelSource::tick() {
-	return false;
-}
-
-bool HellRandomLevelSource::shouldSave() {
-	return true;
-}
-
-std::string HellRandomLevelSource::gatherStats() {
-	return "HellRandomLevelSource";
-}
+bool HellRandomLevelSource::hasChunk(int x, int z) { return true; }
+bool HellRandomLevelSource::tick() { return false; }
+bool HellRandomLevelSource::shouldSave() { return true; }
+std::string HellRandomLevelSource::gatherStats() { return "HellRandomLevelSource"; }
 
 Biome::MobList HellRandomLevelSource::getMobsAt(const MobCategory& mobCategory, int x, int y, int z) {
-	if (Biome::hell != NULL) {
-		return Biome::hell->getMobs(mobCategory);
-	}
+	if (Biome::hell != NULL) return Biome::hell->getMobs(mobCategory);
 	return Biome::MobList();
 }

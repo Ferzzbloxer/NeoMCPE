@@ -1621,19 +1621,44 @@ void Minecraft::_levelGenerated()
 
 	level->validateSpawn();
 
-	// Check if player is already in this level
-	bool playerAlreadyInLevel = false;
-	for (size_t i = 0; i < level->players.size(); i++) {
-		if (level->players[i] == player) { playerAlreadyInLevel = true; break; }
-	}
-
-	if (!playerAlreadyInLevel) {
+	if (!pendingPortalTravel) {
 		level->loadPlayer(player, true);
-	}
+		if (player && !level->isClientSide) {
+			player->resetPos(false);
+		}
+	} else {
+		// Sweep entity lists clean so the engine DOES NOT duplicate you (fixes 2x speed)
+		int pCount = 0;
+		for (int i = (int)level->entities.size() - 1; i >= 0; i--) {
+			if (level->entities[i] == player) {
+				pCount++;
+				if (pCount > 1) { level->entities.erase(level->entities.begin() + i); }
+			}
+		}
+		pCount = 0;
+		for (int i = (int)level->players.size() - 1; i >= 0; i--) {
+			if (level->players[i] == player) {
+				pCount++;
+				if (pCount > 1) { level->players.erase(level->players.begin() + i); }
+			}
+		}
 
-	// ONLY reset position to world spawn if NOT traveling through a portal!
-	if (player && !level->isClientSide && !pendingPortalTravel) {
-		player->resetPos(false);
+		// Ensure player is added exactly ONE time
+		if (std::find(level->entities.begin(), level->entities.end(), player) == level->entities.end()) {
+			level->addEntity(player);
+		}
+		if (std::find(level->players.begin(), level->players.end(), player) == level->players.end()) {
+			level->players.push_back(player);
+		}
+
+		pendingPortalTravel = false;
+		player->removed = false;
+
+		PortalForcer::findOrCreatePortal(level, player, targetPortalX, 45.0f, targetPortalZ);
+
+		if (inputHolder) {
+			player->input = inputHolder->getMoveInput();
+		}
 	}
 
 	if (level && level->dimension) {
@@ -1641,7 +1666,6 @@ void Minecraft::_levelGenerated()
 	}
 
 	this->cameraTargetPlayer = player;
-
 	std::string serverName = options.getStringValue(OPTIONS_USERNAME) + " - " + level->getLevelData()->levelName;
 
 	if (raknetInstance->isServer())
@@ -1658,25 +1682,6 @@ void Minecraft::_levelGenerated()
 	_commandServer = new CommandServer(this);
 	_commandServer->init(commandPort);
 #endif
-
-	// If teleporting through a portal:
-	if (pendingPortalTravel) {
-		pendingPortalTravel = false;
-
-		player->removed = false;
-		player->portalCooldown = 200;
-
-		PortalForcer::findOrCreatePortal(level, player, targetPortalX, 45.0f, targetPortalZ);
-
-		player->level = level;
-		if (!playerAlreadyInLevel) {
-			level->addEntity(player);
-		}
-
-		if (inputHolder) {
-			player->input = inputHolder->getMoveInput();
-		}
-	}
 
 	_hasSignaledGeneratingLevelFinished = true;
 }
@@ -1760,11 +1765,12 @@ void Minecraft::toggleDimension() {
 	float fromZ = player->z;
 
 	Level* oldLevel = level;
+	Level* newLevel = NULL;
 
-	// Strip player from old level lists to prevent clones!
+	// Remove from old level to stop physics
 	oldLevel->removeEntity(player);
-	for (auto it = oldLevel->players.begin(); it != oldLevel->players.end(); ++it) {
-		if (*it == player) { oldLevel->players.erase(it); break; }
+	for (auto it = oldLevel->players.begin(); it != oldLevel->players.end(); ) {
+		if (*it == player) { it = oldLevel->players.erase(it); } else { ++it; }
 	}
 
 	if (player->dimension == 0) {
@@ -1779,31 +1785,28 @@ void Minecraft::toggleDimension() {
 			LevelStorage* netherStorage = new ExternalFileLevelStorage(savePath, netherName);
 
 			LevelSettings settings(level->getSeed(), level->getLevelData()->getGameType());
-			
-			// MUST BE ServerLevel so the physics engine ticks!
 			sNetherLevel = new ServerLevel(netherStorage, netherName, settings, level->getLevelData()->getGeneratorVersion(), netherDim);
 		}
 
+		newLevel = sNetherLevel;
 		player->dimension = 1;
-		player->portalCooldown = 200;
-		pendingPortalTravel = true;
-		targetPortalX = fromX;
-		targetPortalZ = fromZ;
-
-		// Use the engine's native loading screen
-		setLevel(sNetherLevel, "Entering the Nether...", player);
-
 	} else {
 		// ================= NETHER -> OVERWORLD =================
 		sNetherLevel = oldLevel;
+		newLevel = sOverworldLevel;
 
 		player->dimension = 0;
-		player->portalCooldown = 200;
-		pendingPortalTravel = true;
-		targetPortalX = fromX;
-		targetPortalZ = fromZ;
-
-		// Use the engine's native loading screen
-		setLevel(sOverworldLevel, "Leaving the Nether...", player);
 	}
+
+	player->portalCooldown = 200;
+	player->removed = false;
+	player->xd = player->yd = player->zd = 0.0f;
+	player->level = newLevel;
+
+	pendingPortalTravel = true;
+	targetPortalX = fromX;
+	targetPortalZ = fromZ;
+
+	// Use engine's native switch!
+	setLevel(newLevel, (player->dimension == 1) ? "Entering the Nether..." : "Leaving the Nether...", player);
 }
