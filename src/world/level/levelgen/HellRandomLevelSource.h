@@ -57,6 +57,13 @@ private:
 	float sandBuffer[16 * 16];
 	float gravelBuffer[16 * 16];
 	float depthBuffer[16 * 16];
+
+	// Cached arrays so we don't crash the RAM!
+	float* pnr;
+	float* ar;
+	float* br;
+	float* sr;
+	float* dr;
 };
 
 #endif /* NET_MINECRAFT_WORLD_LEVEL_LEVELGEN__HellRandomLevelSource_H__ */
