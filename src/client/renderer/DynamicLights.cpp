@@ -150,9 +150,11 @@ void DynamicLights::update(Minecraft* mc) {
 			int ny = cur.y + dy[f];
 			int nz = cur.z + dz[f];
 
+			// Prevent out-of-bounds segfaults!
+			if (nx < 1 || nx >= LEVEL_WIDTH - 1 || nz < 1 || nz >= LEVEL_DEPTH - 1) continue;
 			if (ny < 0 || ny >= Level::DEPTH) continue;
 
-			// Stop light at solid blocks (light cannot leak through walls!)
+			// Stop light at solid blocks
 			if (level->isSolidBlockingTile(nx, ny, nz)) {
 				continue;
 			}

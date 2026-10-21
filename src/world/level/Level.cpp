@@ -821,16 +821,12 @@ int Level::getBrightness(const LightLayer& layer, int x, int y, int z) {
 }
 
 void Level::setBrightness(const LightLayer& layer, int x, int y, int z, int brightness) {
-	//if (x < -MAX_LEVEL_SIZE || z < -MAX_LEVEL_SIZE || x >= MAX_LEVEL_SIZE || z > MAX_LEVEL_SIZE) {
-	//    return;
-	//}
-	if (y < 0) return;
-	if (y >= DEPTH) return;
-	if (!hasChunk(x >> 4, z >> 4)) return;
+	if (x < 0 || x >= LEVEL_WIDTH || z < 0 || z >= LEVEL_DEPTH) return;
+	if (y < 0 || y >= DEPTH) return;
+
 	LevelChunk* c = getChunk(x >> 4, z >> 4);
-	c->setBrightness(layer, x & 15, y, z & 15, brightness);
-	for (unsigned int i = 0; i < _listeners.size(); i++) {
-		_listeners[i]->tileBrightnessChanged(x, y, z);
+	if (c != NULL && c->getBlockData() != NULL) { // Never crash on empty chunks!
+		c->setBrightness(layer, x & 15, y, z & 15, brightness);
 	}
 }
 

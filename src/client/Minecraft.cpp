@@ -325,8 +325,7 @@ void Minecraft::prepareLevel(const std::string& title) {
 
 	Stopwatch L;
 
-	// Disable the lighting queue during generation so it doesn't blow up memory!
-	level->setUpdateLights(false);
+	level->setUpdateLights(true);
 
 	int Max = CHUNK_CACHE_WIDTH * CHUNK_CACHE_WIDTH;
 	int pp = 0;
@@ -336,6 +335,15 @@ void Minecraft::prepareLevel(const std::string& title) {
 			B.start();
 			level->getTile(x, 64, z);
 			B.stop();
+
+			// Spread sunlight under overhangs & trees safely without memory overflow!
+			L.start();
+			if (level->isNew()) {
+				int lightSteps = 100;
+				while (lightSteps-- > 0 && level->updateLights())
+					;
+			}
+			L.stop();
 		}
 	}
 	A.stop();
