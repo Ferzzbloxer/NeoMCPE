@@ -97,14 +97,17 @@ void DynamicLights::update(Minecraft* mc) {
 		return;
 	}
 
-	// 1. Restore all previously lit blocks to their true original light
+	// Restore all previously lit blocks to their true original light
 	if (!sLitBlocks.empty()) {
 		for (size_t i = 0; i < sLitBlocks.size(); i++) {
 			const LitBlock& b = sLitBlocks[i];
-			level->setBrightness(LightLayer::Block, b.x, b.y, b.z, b.prevLight);
+			int tile = level->getTile(b.x, b.y, b.z);
+			// NEVER extinguish real torches (50), glowstone (89), or lava (10/11)!
+			if (tile != 50 && tile != 89 && tile != 10 && tile != 11) {
+				level->setBrightness(LightLayer::Block, b.x, b.y, b.z, b.prevLight);
+			}
 		}
 
-		// Mark old region dirty so it dims smoothly
 		int r = sLastLightVal;
 		level->setTilesDirty(sLastX - r, sLastY - r, sLastZ - r, sLastX + r, sLastY + r, sLastZ + r);
 		sLitBlocks.clear();
@@ -119,7 +122,7 @@ void DynamicLights::update(Minecraft* mc) {
 		return;
 	}
 
-	// 2. Fast BFS Flood-Fill to propagate dynamic light realistically through open air
+	// Fast BFS Flood-Fill to propagate dynamic light realistically through open air
 	std::queue<LightNode> queue;
 	std::set<long long> visited;
 
@@ -167,7 +170,7 @@ void DynamicLights::update(Minecraft* mc) {
 		}
 	}
 
-	// 3. Mark surrounding chunk meshes dirty for immediate re-tesselation
+	// Mark surrounding chunk meshes dirty for immediate re-tesselation
 	level->setTilesDirty(px - currentLight, py - currentLight, pz - currentLight,
 	                     px + currentLight, py + currentLight, pz + currentLight);
 }

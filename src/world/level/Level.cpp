@@ -1880,7 +1880,7 @@ void Level::updateLight(const LightLayer& layer, int x0, int y0, int z0, int x1,
 		}
 	}
 	_lightUpdates.push_back(LightUpdate(layer, x0, y0, z0, x1, y1, z1));
-	int max = 1000000;
+	int max = 5000000;
 	if ((int)_lightUpdates.size() > max) {
 		LOGI("More than %d updates, aborting lighting updates\n", max);
 		_lightUpdates.clear();

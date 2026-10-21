@@ -322,7 +322,6 @@ void Minecraft::prepareLevel(const std::string& title) {
 
 	Stopwatch A, B, C, D;
 	A.start();
-
 	Stopwatch L;
 
 	level->setUpdateLights(true);
@@ -336,11 +335,10 @@ void Minecraft::prepareLevel(const std::string& title) {
 			level->getTile(x, 64, z);
 			B.stop();
 
-			// Spread sunlight under overhangs & trees safely without memory overflow!
 			L.start();
 			if (level->isNew()) {
-				int lightSteps = 100;
-				while (lightSteps-- > 0 && level->updateLights())
+				// Drain lighting completely for each chunk so it NEVER piles up!
+				while (level->updateLights())
 					;
 			}
 			L.stop();
@@ -1765,7 +1763,6 @@ void Minecraft::toggleDimension() {
 	if (player == NULL || level == NULL) return;
 
 	level->saveLevelData();
-	level->saveGame();
 
 	float fromX = player->x;
 	float fromZ = player->z;
