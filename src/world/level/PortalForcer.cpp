@@ -16,7 +16,53 @@ bool PortalForcer::findOrCreatePortal(Level* level, Entity* entity, float target
 	if (iz < 30) iz = 30;
 	if (iz > 990) iz = 990;
 
-	// In the Nether, find a good cavern floor height
+	float eyeOffset = 1.62f;
+	Player* p = Player::asPlayer(entity);
+	if (p != NULL) {
+		eyeOffset = p->heightOffset;
+	}
+
+	// ==========================================================
+	// 1. Search for an EXISTING portal nearby (16-block radius)
+	// ==========================================================
+	int bestDistSq = 999999;
+	int foundX = -1, foundY = -1, foundZ = -1;
+
+	// Step by 1 so we never miss a portal block
+	for (int x = ix - 16; x <= ix + 16; x++) {
+		for (int z = iz - 16; z <= iz + 16; z++) {
+			for (int y = 10; y < 118; y++) {
+				if (level->getTile(x, y, z) == Tile::portalTile->id) {
+					int dist = (x - ix) * (x - ix) + (y - (int)targetY) * (y - (int)targetY) + (z - iz) * (z - iz);
+					if (dist < bestDistSq) {
+						bestDistSq = dist;
+						foundX = x;
+						foundY = y;
+						foundZ = z;
+					}
+				}
+			}
+		}
+	}
+
+	// If existing portal found, place player safely in front of it!
+	if (foundX != -1) {
+		// Ensure we spawn at the bottom row of the portal so we don't spawn floating
+		while (level->getTile(foundX, foundY - 1, foundZ) == Tile::portalTile->id) {
+			foundY--;
+		}
+
+		entity->moveTo((float)foundX + 0.5f, (float)foundY + eyeOffset, (float)foundZ + 2.5f, entity->yRot, entity->xRot);
+		entity->xd = entity->yd = entity->zd = 0.0f;
+		return true; // Stop here! Don't build a new one.
+	}
+
+
+	// ==========================================================
+	// 2. No portal found: Build a NEW one
+	// ==========================================================
+	
+	// Find a good cavern floor height
 	int by = 45;
 	if (level->dimension->id == 1) {
 		for (int testY = 35; testY < 85; testY++) {
@@ -33,7 +79,7 @@ bool PortalForcer::findOrCreatePortal(Level* level, Entity* entity, float target
 	int bx = ix;
 	int bz = iz;
 
-	// 1. Carve walking room of air and build stone floor platform
+	// Carve walking room of air and build stone floor platform
 	for (int dx = -2; dx <= 5; dx++) {
 		for (int dz = -3; dz <= 5; dz++) {
 			for (int dy = 1; dy <= 4; dy++) {
@@ -45,7 +91,7 @@ bool PortalForcer::findOrCreatePortal(Level* level, Entity* entity, float target
 		}
 	}
 
-	// 2. Build 4x5 Obsidian Frame
+	// Build 4x5 Obsidian Frame
 	for (int w = 0; w < 4; w++) {
 		level->setTile(bx + w, by, bz, Tile::obsidian->id);
 		level->setTile(bx + w, by + 4, bz, Tile::obsidian->id);
@@ -61,13 +107,7 @@ bool PortalForcer::findOrCreatePortal(Level* level, Entity* entity, float target
 		level->sendTileUpdated(bx + 2, by + h, bz);
 	}
 
-	// 3. Teleport player safely ON TOP of the floor and 2.5 blocks in front
-	float eyeOffset = 1.62f;
-	Player* p = Player::asPlayer(entity);
-	if (p != NULL) {
-		eyeOffset = p->heightOffset;
-	}
-
+	// Teleport player safely ON TOP of the floor and 2.5 blocks in front
 	entity->moveTo((float)bx + 1.5f, (float)by + 1.0f + eyeOffset, (float)bz + 2.5f, entity->yRot, entity->xRot);
 	entity->xd = 0.0f;
 	entity->yd = 0.0f;

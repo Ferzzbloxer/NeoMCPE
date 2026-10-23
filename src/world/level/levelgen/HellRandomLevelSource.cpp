@@ -8,6 +8,8 @@
 #include "../biome/Biome.h"
 #include "feature/FeatureInclude.h"
 #include "../../../util/Mth.h"
+#include "../../entity/MobFactory.h"
+#include "../../entity/Mob.h"
 
 // ----------------------------------------------------------------------------
 // 1.0 Hanging Glowstone Stalactite Cluster Generator
@@ -332,6 +334,37 @@ void HellRandomLevelSource::postProcess(ChunkSource* parent, int xt, int zt) {
 		int z = zo + random.nextInt(16) + 8;
 		FlowerFeature feature(Tile::mushroom2->id);
 		feature.place(level, &random, x, y, z);
+	}
+
+	HeavyTile::instaFall = false;
+	level->isGeneratingTerrain = false;
+
+	// 8. Spawn Zombie Pigman Hordes in the caverns!
+	// 50% chance per chunk to spawn a pack of 1 to 4 Pigmen
+	if (random.nextInt(2) == 0) {
+		int pigmanCount = random.nextInt(4) + 1;
+		for (int i = 0; i < pigmanCount; i++) {
+			int px = xo + random.nextInt(16);
+			int pz = zo + random.nextInt(16);
+			int py = random.nextInt(60) + 30; // Start scan in the middle of the cavern
+
+			// Scan downwards to find the floor
+			while (py > 10 && level->getTile(px, py, pz) == 0) {
+				py--;
+			}
+
+			// If we landed on Netherrack with enough air space above it, spawn the Pigman!
+			if (level->getTile(px, py, pz) == Tile::netherrack->id && 
+			    level->getTile(px, py + 1, pz) == 0 && 
+			    level->getTile(px, py + 2, pz) == 0) {
+				
+				Mob* pigman = MobFactory::CreateMob(36, level); // 36 = PigZombie
+				if (pigman != NULL) {
+					pigman->setPos((float)px + 0.5f, (float)py + 1.0f, (float)pz + 0.5f);
+					level->addEntity(pigman);
+				}
+			}
+		}
 	}
 
 	HeavyTile::instaFall = false;

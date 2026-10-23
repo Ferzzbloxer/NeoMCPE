@@ -1689,48 +1689,35 @@ void Minecraft::_levelGenerated()
 
 void Minecraft::leaveGame(bool renameLevel /*=false*/)
 {
-	#ifndef STANDALONE_SERVER
-		DynamicLights::clear(level);
-	#endif
 	if (isGeneratingLevel || !_hasSignaledGeneratingLevelFinished)
 		return;
 
-	// Save BOTH Overworld and Nether before exiting to title!
+	// Safely save BOTH dimensions
 	if (sNetherLevel != NULL) {
 		sNetherLevel->saveLevelData();
 		sNetherLevel->saveGame();
-		if (sNetherLevel->getChunkSource())
+		if (sNetherLevel->getChunkSource()) {
 			sNetherLevel->getChunkSource()->saveAll(true);
-		if (sNetherLevel != level) {
-			delete sNetherLevel->getLevelStorage();
-			delete sNetherLevel;
 		}
-		sNetherLevel = NULL;
 	}
 
-	if (sOverworldLevel != NULL && sOverworldLevel != level) {
+	if (sOverworldLevel != NULL) {
 		sOverworldLevel->saveLevelData();
 		sOverworldLevel->saveGame();
-		if (sOverworldLevel->getChunkSource())
+		if (sOverworldLevel->getChunkSource()) {
 			sOverworldLevel->getChunkSource()->saveAll(true);
-		delete sOverworldLevel->getLevelStorage();
-		delete sOverworldLevel;
-		sOverworldLevel = NULL;
+		}
 	}
 
-	// Always reset player to Overworld so loading from menu starts cleanly!
+	// Always reset player dimension tracker to Overworld for clean loading from menu
 	if (player != NULL) {
 		player->dimension = 0;
 	}
 
 	pendingPortalTravel = false;
 	isGeneratingLevel = false;
-	bool saveLevel = level && (!level->isClientSide || renameLevel);
 
 	raknetInstance->disconnect();
-	if (saveLevel && level != NULL) {
-		level->getChunkSource()->saveAll(true);
-	}
 
 	cameraTargetPlayer = NULL;
 #ifndef STANDALONE_SERVER
@@ -1740,11 +1727,27 @@ void Minecraft::leaveGame(bool renameLevel /*=false*/)
 	delete netCallback;
 	netCallback = NULL;
 
+	// ONLY DELETE ONCE! We identify which one is inactive and delete it.
+	// The active 'level' is safely deleted by the engine's normal block below.
+	if (sNetherLevel != NULL && sNetherLevel != level) {
+		delete sNetherLevel->getLevelStorage();
+		delete sNetherLevel;
+	}
+	if (sOverworldLevel != NULL && sOverworldLevel != level) {
+		delete sOverworldLevel->getLevelStorage();
+		delete sOverworldLevel;
+	}
+
+	sNetherLevel = NULL;
+	sOverworldLevel = NULL;
+
+	// Engine safely deletes the active level here
 	if (level != NULL) {
 		delete level->getLevelStorage();
 		delete level;
 		level = NULL;
 	}
+
 	player = NULL;
 	cameraTargetPlayer = NULL;
 	_running = false;
@@ -1765,19 +1768,29 @@ void Minecraft::toggleDimension() {
 	level->saveLevelData();
 
 	float fromX = player->x;
+	float fromY = player->y;
 	float fromZ = player->z;
 
 	Level* oldLevel = level;
 	Level* newLevel = NULL;
 
-	// Remove from old level to stop physics
-	oldLevel->removeEntity(player);
-	for (auto it = oldLevel->players.begin(); it != oldLevel->players.end(); ) {
-		if (*it == player) { it = oldLevel->players.erase(it); } else { ++it; }
+	// Strip player from old level lists to prevent duplication & 2x speed!
+	for (int i = (int)oldLevel->entities.size() - 1; i >= 0; i--) {
+		if (oldLevel->entities[i] == player) {
+			oldLevel->entities.erase(oldLevel->entities.begin() + i);
+		}
+	}
+	for (int i = (int)oldLevel->players.size() - 1; i >= 0; i--) {
+		if (oldLevel->players[i] == player) {
+			oldLevel->players.erase(oldLevel->players.begin() + i);
+		}
 	}
 
 	if (player->dimension == 0) {
 		// ================= OVERWORLD -> NETHER =================
+		float targetX = fromX;
+		float targetZ = fromZ;
+
 		sOverworldLevel = oldLevel;
 
 		if (sNetherLevel == NULL) {
@@ -1793,23 +1806,54 @@ void Minecraft::toggleDimension() {
 
 		newLevel = sNetherLevel;
 		player->dimension = 1;
+		targetPortalX = targetX;
+		targetPortalZ = targetZ;
+
 	} else {
 		// ================= NETHER -> OVERWORLD =================
+		float targetX = fromX;
+		float targetZ = fromZ;
+
 		sNetherLevel = oldLevel;
 		newLevel = sOverworldLevel;
 
 		player->dimension = 0;
+		targetPortalX = targetX;
+		targetPortalZ = targetZ;
 	}
 
+	// Hot-swap level pointers cleanly
 	player->portalCooldown = 200;
 	player->removed = false;
 	player->xd = player->yd = player->zd = 0.0f;
+
+	oldLevel->removeEntity(player);
+
 	player->level = newLevel;
+	this->level = newLevel;
 
-	pendingPortalTravel = true;
-	targetPortalX = fromX;
-	targetPortalZ = fromZ;
+#ifndef STANDALONE_SERVER
+	if (levelRenderer != NULL) {
+		levelRenderer->setLevel(newLevel);
+	}
+	if (particleEngine != NULL) {
+		particleEngine->setLevel(newLevel);
+	}
+#endif
+	gameMode->initLevel(newLevel);
 
-	// Use engine's native switch!
-	setLevel(newLevel, (player->dimension == 1) ? "Entering the Nether..." : "Leaving the Nether...", player);
+	// Add player exactly once to new level
+	newLevel->addEntity(player);
+	newLevel->players.push_back(player);
+
+	// Find existing portal or build new one
+	PortalForcer::findOrCreatePortal(newLevel, player, targetPortalX, fromY, targetPortalZ);
+
+	if (inputHolder) {
+		player->input = inputHolder->getMoveInput();
+	}
+
+	if (newLevel->dimension) {
+		newLevel->dimension->FogType = options.getIntValue(OPTIONS_FOG_TYPE);
+	}
 }
